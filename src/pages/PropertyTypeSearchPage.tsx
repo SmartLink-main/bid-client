@@ -46,7 +46,6 @@ export default function PropertyTypeSearchPage() {
 
   // 현재 활성화된 탭의 데이터 찾기
   const currentCategory = propertyTypes.find(cat => cat.id === activeTab)!;
-  const CategoryIcon = currentCategory.icon;
 
   // 현재 탭의 모든 항목이 선택되었는지 확인
   const isCurrentTabAllSelected = currentCategory.items.every(item => selectedTypes.includes(item));
