@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Search, Landmark } from 'lucide-react';
 
@@ -23,10 +24,17 @@ const courtDataList = [
 ];
 
 export default function CourtSearchPage() {
-  const [selectedCourt, setSelectedCourt] = useState('서울중앙');
+  const navigate = useNavigate();
+  const [selectedCourt, setSelectedCourt] = useState({
+    group: courtDataList[0].group,
+    name: courtDataList[0].items[0],
+  });
 
   const handleSearch = () => {
-    alert(`선택된 법원: [${selectedCourt}]\n해당 법원의 경매 물건을 검색합니다.\n* 실제 매물 DB 연동은 추후 진행됩니다.`);
+    navigate(`/search?${new URLSearchParams({
+      court_name: selectedCourt.group.replace('지방법원', ''),
+      branch_name: selectedCourt.name,
+    })}`);
   };
 
   return (
@@ -64,11 +72,11 @@ export default function CourtSearchPage() {
                   {/* 오른쪽: 관할 세부 법원 버튼들 */}
                   <div className="flex flex-wrap gap-2.5 flex-grow">
                     {section.items.map((court) => {
-                      const isChecked = selectedCourt === court;
+                      const isChecked = selectedCourt.group === section.group && selectedCourt.name === court;
                       return (
                         <button
                           key={court}
-                          onClick={() => setSelectedCourt(court)}
+                          onClick={() => setSelectedCourt({ group: section.group, name: court })}
                           className={`px-4 py-2 text-[14px] font-bold rounded-lg transition-all border ${
                             isChecked
                               ? 'bg-indigo-50 border-indigo-500 text-indigo-700 shadow-sm ring-1 ring-indigo-500'
@@ -92,7 +100,7 @@ export default function CourtSearchPage() {
                 <div className="flex items-center gap-2 bg-white border border-indigo-200 px-4 py-2.5 rounded-xl shadow-sm w-full truncate">
                   <Landmark className="w-4 h-4 text-indigo-500 shrink-0" />
                   <span className="font-extrabold text-[15px] tracking-tight text-indigo-900 truncate">
-                    {selectedCourt}
+                    {selectedCourt.name}
                   </span>
                 </div>
               </div>
@@ -101,7 +109,7 @@ export default function CourtSearchPage() {
                 onClick={handleSearch}
                 className="w-full sm:w-auto flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-3 px-10 rounded-xl shadow-md transition-all text-[15.5px] shrink-0"
               >
-                <Search className="w-5 h-5" /> 검색하기
+                <Search className="w-5 h-5" /> 물건 검색하기
               </button>
             </div>
 

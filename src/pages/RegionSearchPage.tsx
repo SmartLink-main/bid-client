@@ -1,14 +1,35 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { Search, Map, CheckSquare, Square, MapPin } from 'lucide-react';
+import { Search, Map, MapPin } from 'lucide-react';
 
 // ==========================================
 // 1. 전국 광역 자치단체 (시/도)
 // ==========================================
 const provinces = [
-  '서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', 
+  '서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종',
   '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'
 ];
+
+const provinceSearchTerms: Record<string, string> = {
+  '서울': '서울특별시',
+  '부산': '부산광역시',
+  '대구': '대구광역시',
+  '인천': '인천광역시',
+  '광주': '광주광역시',
+  '대전': '대전광역시',
+  '울산': '울산광역시',
+  '세종': '세종특별자치시',
+  '경기': '경기도',
+  '강원': '강원특별자치도',
+  '충북': '충청북도',
+  '충남': '충청남도',
+  '전북': '전북특별자치도',
+  '전남': '전라남도',
+  '경북': '경상북도',
+  '경남': '경상남도',
+  '제주': '제주특별자치도',
+};
 
 // ==========================================
 // 2. 대한민국 전체 시/군/구 데이터 (100% 반영)
@@ -34,44 +55,39 @@ const siGunGuData: Record<string, string[]> = {
 };
 
 export default function RegionSearchPage() {
+  const navigate = useNavigate();
   const [selectedProvince, setSelectedProvince] = useState<string>('경북');
   const [selectedGuList, setSelectedGuList] = useState<string[]>([]);
 
   const currentGuList = siGunGuData[selectedProvince] || [];
-  const isAllSelected = currentGuList.length > 0 && selectedGuList.length === currentGuList.length;
 
-  useEffect(() => {
+  const selectProvince = (province: string) => {
+    setSelectedProvince(province);
     setSelectedGuList([]);
-  }, [selectedProvince]);
-
-  const toggleGu = (guName: string) => {
-    setSelectedGuList(prev => 
-      prev.includes(guName) ? prev.filter(g => g !== guName) : [...prev, guName]
-    );
   };
 
-  const toggleAllGu = () => {
-    if (isAllSelected) {
-      setSelectedGuList([]);
-    } else {
-      setSelectedGuList([...currentGuList]);
-    }
+  const toggleGu = (guName: string) => {
+    setSelectedGuList(prev => prev[0] === guName ? [] : [guName]);
   };
 
   const handleSearch = () => {
     if (selectedGuList.length === 0) {
-      alert("검색할 시/군/구를 최소 1개 이상 선택해주세요.");
+      alert('검색할 시/군/구를 선택해 주세요.');
       return;
     }
-    alert(`[검색 완료]\n지역: ${selectedProvince}\n선택된 시/군/구: ${selectedGuList.join(', ')}\n\n* 안정적이고 빠른 검색이 실행됩니다!`);
+
+    const searchParams = new URLSearchParams({
+      sido: provinceSearchTerms[selectedProvince],
+      sigungu: selectedGuList[0],
+    });
+
+    navigate(`/search?${searchParams}`);
   };
 
   return (
     <Layout>
       <div className="w-full flex-grow bg-slate-50 py-5 px-4 flex flex-col min-h-[85vh]">
         <div className="w-full max-w-6xl mx-auto flex-grow flex flex-col">
-
-          {/* 상단 타이틀 */}
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2.5 bg-white rounded-xl shadow-sm border border-gray-100">
               <Map className="w-6 h-6 text-indigo-600" />
@@ -83,13 +99,11 @@ export default function RegionSearchPage() {
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col flex-grow overflow-hidden">
-            
-            {/* 1. 시/도 선택 탭 */}
             <div className="flex flex-wrap items-center p-3.5 bg-slate-50/80 border-b border-gray-200 gap-2">
               {provinces.map((province) => (
                 <button
                   key={province}
-                  onClick={() => setSelectedProvince(province)}
+                  onClick={() => selectProvince(province)}
                   className={`px-5 py-2.5 rounded-xl text-[14.5px] font-bold transition-all ${
                     selectedProvince === province
                       ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-600 ring-offset-1'
@@ -101,36 +115,24 @@ export default function RegionSearchPage() {
               ))}
             </div>
 
-            {/* 2. 시/군/구 체크박스 영역 */}
             <div className="flex flex-col flex-grow bg-white">
-              
-              {/* 상단 컨트롤 바 (전체선택) */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-slate-50/30">
-                <button 
-                  onClick={toggleAllGu} 
-                  className="flex items-center gap-2 text-indigo-700 font-bold text-[14.5px] hover:text-indigo-800 transition-colors group"
-                >
-                  {isAllSelected ? (
-                    <CheckSquare className="w-5 h-5 text-indigo-600" />
-                  ) : (
-                    <Square className="w-5 h-5 text-gray-400 group-hover:text-indigo-500" />
-                  )}
-                  전체선택
-                </button>
+                <span className="text-indigo-700 font-bold text-[14.5px]">
+                  시/군/구 한 곳을 선택해 주세요
+                </span>
                 <div className="text-[14.5px] text-gray-600 font-medium bg-white px-4 py-1.5 rounded-lg border border-gray-200 shadow-sm">
-                  <span className="text-indigo-700 font-bold mr-1">{selectedProvince}</span> 
+                  <span className="text-indigo-700 font-bold mr-1">{selectedProvince}</span>
                   관할 시/군/구 (총 <span className="font-bold text-gray-900">{currentGuList.length}</span>개)
                 </div>
               </div>
 
-              {/* 시/군/구 체크박스 그리드 */}
               <div className="p-6 md:p-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-x-6 gap-y-5 content-start">
                 {currentGuList.map((gu) => {
                   const isChecked = selectedGuList.includes(gu);
                   return (
-                    <button 
-                      key={gu} 
-                      onClick={() => toggleGu(gu)} 
+                    <button
+                      key={gu}
+                      onClick={() => toggleGu(gu)}
                       className="flex items-center gap-3 text-left group transition-all"
                     >
                       <div className={`w-5 h-5 rounded flex items-center justify-center transition-colors shadow-sm ${isChecked ? 'bg-indigo-600 border-indigo-600' : 'bg-white border border-gray-300 group-hover:border-indigo-400'}`}>
@@ -149,7 +151,6 @@ export default function RegionSearchPage() {
               </div>
             </div>
 
-            {/* 하단 고정 검색 바 */}
             <div className="bg-indigo-50 py-4 px-6 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-indigo-100 mt-auto">
               <div className="flex items-center gap-3 text-indigo-900 w-full sm:w-auto overflow-hidden">
                 <span className="font-bold text-indigo-600 text-[14.5px] shrink-0">선택된 지역:</span>
@@ -158,13 +159,11 @@ export default function RegionSearchPage() {
                   <span className="font-extrabold text-[15px] text-slate-800 shrink-0">
                     {selectedProvince}
                   </span>
-                  {selectedGuList.length > 0 && (
+                  {selectedGuList.length === 1 && (
                     <>
                       <span className="text-indigo-300 mx-1">|</span>
                       <span className="font-bold text-[14.5px] text-indigo-900 truncate">
-                        {selectedGuList.length === 1 
-                          ? selectedGuList[0] 
-                          : `${selectedGuList[0]} 등 ${selectedGuList.length}곳`}
+                        {selectedGuList[0]}
                       </span>
                     </>
                   )}
@@ -172,21 +171,20 @@ export default function RegionSearchPage() {
                     <>
                       <span className="text-indigo-300 mx-1">|</span>
                       <span className="font-medium text-[14px] text-gray-400 truncate">
-                        시/군/구를 선택해주세요
+                        시/군/구를 선택해 주세요
                       </span>
                     </>
                   )}
                 </div>
               </div>
-              
-              <button 
+
+              <button
                 onClick={handleSearch}
                 className="w-full sm:w-auto flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-3 px-10 rounded-xl shadow-md transition-all text-[15.5px] shrink-0"
               >
-                <Search className="w-5 h-5" /> 매물 검색하기
+                <Search className="w-5 h-5" /> 물건 검색하기
               </button>
             </div>
-
           </div>
         </div>
       </div>

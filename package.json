@@ -7,16 +7,23 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "validate:forms": "node scripts/validate-knowledge-forms.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.7.0",
+    "pretendard": "^1.3.9",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-router-dom": "^7.13.2"
+    "react-leaflet": "^5.0.0",
+    "react-router-dom": "^7.13.2",
+    "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@types/leaflet": "^1.9.22",
     "@types/node": "^24.12.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

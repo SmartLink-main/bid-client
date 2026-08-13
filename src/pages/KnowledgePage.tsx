@@ -5,6 +5,12 @@ import {
   FileCheck, Coins, Scale, ScrollText, Building, Package, Truck, 
   Archive, FileDown, Globe, ExternalLink, MapPin, Phone, Map, Users
 } from 'lucide-react';
+import {
+  getAuctionFormDownloadHref,
+  getAuctionFormDownloadName,
+  movableForms,
+  realEstateForms,
+} from '../lib/knowledge-forms';
 
 type TabType = 'process' | 'terms' | 'forms' | 'reference' | 'courts';
 type ProcessType = 'realEstate' | 'movable'; 
@@ -177,76 +183,6 @@ export default function KnowledgePage() {
   const filteredTerms = auctionTerms.filter(item => 
     item.term.includes(searchTerm) || item.desc.includes(searchTerm)
   );
-
-  // ==========================================
-  // 3. 경매서식 다운로드
-  // ==========================================
-  const realEstateForms = [
-    { title: "37. 전세사기피해자 지원 및 주거안정에 관한 특별법에 따른 임차인 우선매수신고서" },
-    { title: "36. 전세사기피해자 지원 및 주거안정에 관한 특별법에 따른 경매유예등 신청서" },
-    { title: "35. 권리신고 및 배당요구신청서(주택임대차)" },
-    { title: "34. 권리신고 및 배당요구신청서(상가임대차)" },
-    { title: "33. 사법보좌관의 처분에 대한 이의신청서" },
-    { title: "32. 부동산임의경매신청서" },
-    { title: "31. 부동산강제경매신청서" },
-    { title: "30. 차액지급신고서" },
-    { title: "29. 자동차소유권이전등기 및 말소등록촉탁신청서" },
-    { title: "28. 기간입찰용 입금증명서" },
-    { title: "27. 공동입찰신고서 및 공동입찰자목록" },
-    { title: "26. 임차인 우선매수신고서" },
-    { title: "25. 공유자 우선매수신고서" },
-    { title: "24. 기간입찰표 및 위임장" },
-    { title: "23. 기일입찰표 및 위임장" },
-    { title: "22. 부동산소유권이전등기 촉탁신청서" },
-    { title: "21. 매각결정취소 신청서" },
-    { title: "20. 부동산인도명령 신청서" },
-    { title: "19. 명도확인서" },
-    { title: "18. 부기 및 환부신청서" },
-    { title: "17. 배당액 영수증" },
-    { title: "16. 매각대금완납증명원" },
-    { title: "15. 매각대금납입신청서" },
-    { title: "14. 채권상계신청서" },
-    { title: "13. 법원보관금 환급신청서" },
-    { title: "12. 항고장" },
-    { title: "11. 매각허가에 대한 이의신청서" },
-    { title: "10. 부동산경매개시결정에 대한 이의신청" },
-    { title: "9. 강제경매개시결정에 대한 이의신청" },
-    { title: "8. 집행관 송달신청서" },
-    { title: "7. 경매취하동의서" },
-    { title: "6. 경매취하서" },
-    { title: "5. 입찰(경매)기일 변경(연기) 신청서" },
-    { title: "4. 배당요구신청" },
-    { title: "3. 채권계산서" },
-    { title: "2. 보정서" },
-    { title: "1. 부동산일괄매각신청" }
-  ];
-
-  const movableForms = [
-    { title: "24. 청구금액계산서" },
-    { title: "23. 동산경매 신청서" },
-    { title: "22. 해임 신청서" },
-    { title: "21. 포괄계좌입금 해지 신청서" },
-    { title: "20. 포괄계좌입금 신청서" },
-    { title: "19. 집행조서등본 신청서" },
-    { title: "18. 집행정지 집행취소 신청서" },
-    { title: "17. 집행속행 신청서" },
-    { title: "16. 증명원" },
-    { title: "15. 입찰표" },
-    { title: "14. 임의변제 신청서" },
-    { title: "13. 이해관계 진술서" },
-    { title: "12. 위임장" },
-    { title: "11. 배우자 배당요구 신청서" },
-    { title: "10. 매각촉구 신청서" },
-    { title: "9. 공동입찰자목록" },
-    { title: "8. 공동입찰 신고서" },
-    { title: "7. 계좌입금 신청서" },
-    { title: "6. 강제집행 추가 위임장" },
-    { title: "5. 강제집행 진행에 관한 신청서" },
-    { title: "4. 강제집행 신청 취하서 등" },
-    { title: "3. 강제집행 신청서" },
-    { title: "2. 감축 신청서" },
-    { title: "1. 감정장소약도" }
-  ];
 
   // ==========================================
   // 4. 유용한 참고 사이트 데이터 (직접 다운받은 로고 파일 연결)
@@ -500,15 +436,15 @@ export default function KnowledgePage() {
                       
                       <div className="flex gap-2 shrink-0 ml-[52px] md:ml-0">
                         <a 
-                          href={`/forms/${form.title}.hwp`} 
-                          download={`${form.title}.hwp`}
+                          href={getAuctionFormDownloadHref(form, 'hwp')}
+                          download={getAuctionFormDownloadName(form, 'hwp')}
                           className="px-3 py-1.5 text-xs font-bold text-blue-600 bg-white hover:bg-blue-50 border border-blue-100 rounded-md transition-colors shadow-sm"
                         >
                           HWP
                         </a>
                         <a 
-                          href={`/forms/${form.title}.doc`} 
-                          download={`${form.title}.doc`}
+                          href={getAuctionFormDownloadHref(form, 'doc')}
+                          download={getAuctionFormDownloadName(form, 'doc')}
                           className="px-3 py-1.5 text-xs font-bold text-indigo-600 bg-white hover:bg-indigo-50 border border-indigo-100 rounded-md transition-colors shadow-sm"
                         >
                           WORD
