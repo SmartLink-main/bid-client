@@ -147,8 +147,8 @@ export default function ScheduledSearchPage() {
 
   return (
     <Layout>
-      <div className="w-full flex-grow bg-slate-50 px-4 py-6">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+      <div className="w-full flex-grow bg-slate-50 px-4 py-5">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
           <div><h1 className="flex items-center gap-2 text-2xl font-extrabold text-slate-900"><CalendarClock className="h-6 w-6 text-indigo-600" /> 첫 매각기일 미지정 물건</h1><p className="mt-1 text-sm text-gray-500">경매 사건과 물건은 등록됐지만 아직 매각일정과 한 번도 연결되지 않은 물건입니다. 미래 매각일이 확정됐다는 뜻은 아닙니다.</p></div>
           <form onSubmit={handleSubmit} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">

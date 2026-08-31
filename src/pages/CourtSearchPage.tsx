@@ -59,10 +59,10 @@ export default function CourtSearchPage() {
             <div className="flex flex-col divide-y divide-gray-100 bg-white">
               {courtDataList.map((section) => (
                 // md:flex-row를 써서 PC에서는 옆으로 나란히, 모바일에서는 위아래로 떨어지게 반응형 적용!
-                <div key={section.group} className="flex flex-col md:flex-row md:items-start py-5 px-5 hover:bg-slate-50/50 transition-colors">
+                <div key={section.group} data-testid="court-section" className="flex flex-col md:flex-row md:items-start py-4 px-5 hover:bg-slate-50/50 transition-colors">
                   
                   {/* 왼쪽: 메인 지방법원 이름 */}
-                  <div className="w-full md:w-44 flex-shrink-0 mb-3 md:mb-0 flex items-center md:pt-1.5">
+                  <div className="w-full md:w-44 flex-shrink-0 mb-2 md:mb-0 flex items-center md:pt-1.5">
                     <h3 className="text-[14.5px] font-extrabold text-slate-800 flex items-center gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
                       {section.group}
@@ -70,7 +70,7 @@ export default function CourtSearchPage() {
                   </div>
 
                   {/* 오른쪽: 관할 세부 법원 버튼들 */}
-                  <div className="flex flex-wrap gap-2.5 flex-grow">
+                  <div data-testid="court-options" className="flex flex-wrap gap-x-2.5 gap-y-2 flex-grow">
                     {section.items.map((court) => {
                       const isChecked = selectedCourt.group === section.group && selectedCourt.name === court;
                       return (

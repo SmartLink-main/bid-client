@@ -339,6 +339,10 @@ export type QuestionGoodsResponse = {
     terms: string[]
     max_price: Nullable<number>
   }
+  interpretation: {
+    method: 'ai' | 'rules'
+    fallback_used: boolean
+  }
   total: number
   limit: number
   items: QuestionGoodsItem[]

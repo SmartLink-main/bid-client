@@ -7,6 +7,8 @@
 | Method | Backend path | Client integration |
 |---|---|---|
 | `GET` | `/api/v1/admin/users` | `/admin/users` 관리자 회원 목록 |
+| `GET` | `/api/v1/admin/inquiries` | `/admin/inquiries` 관리자 전체 문의 목록 |
+| `PUT` | `/api/v1/admin/inquiries/{inquiry_id}/answer` | `/admin/inquiries` 관리자 답변 등록·수정 |
 | `POST` | `/api/v1/signup/sms` | `/signup` SMS 발송 단계 |
 | `POST` | `/api/v1/signup/sms/verify` | `/signup` SMS 확인 단계 |
 | `POST` | `/api/v1/signup` | `/signup` 회원 생성 단계 |
@@ -18,6 +20,8 @@
 | `POST` | `/api/v1/logout` | 공통 레이아웃 로그아웃 |
 | `GET` | `/api/v1/me` | 앱 시작 세션 검증 및 `/account` 프로필 |
 | `DELETE` | `/api/v1/me` | `/account` 현재 비밀번호 확인 후 탈퇴 |
+| `POST` | `/api/v1/inquiries` | `/support` 로그인 회원 문의 접수 |
+| `GET` | `/api/v1/inquiries` | `/support` 본인 문의와 답변 목록 |
 | `GET` | `/api/v1/health` | `/system-status` 상태 확인 |
 | `GET` | `/api/v1/schedule` | `/schedules` 공고 일정 목록 |
 | `GET` | `/api/v1/auction-detail/{schedule_id}` | `/schedules/:scheduleId` 공고 JSON 상세 |
@@ -29,7 +33,7 @@
 | `GET` | `/api/v1/search/special` | `/special-search`에서 선택한 특수물건 검색 |
 | `GET` | `/api/v1/search/special/types` | `/special-search` 선택 유형 동적 조회 |
 | `GET` | `/api/v1/geo/stations` | `/subway-search` 서버 역 스냅샷 자동완성 |
-| `GET` | `/api/v1/geo/map` | `/map-search` WGS84 지도 뷰포트 검색 |
+| `GET` | `/api/v1/geo/map` | 일반 지도 검색의 WGS84 지도 뷰포트 조회 API |
 | `GET` | `/api/v1/geo/subway` | `/subway-search` 서버 `station_id` 기준 반경 검색 |
 | `GET` | `/api/v1/search/map` | 원천 X/Y 기반 이전 지도 검색 호환 경로 |
 | `GET` | `/api/v1/search/subway` | 클라이언트 X/Y 기반 이전 역 검색 호환 경로 |

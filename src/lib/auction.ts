@@ -48,6 +48,16 @@ export type AuctionGoodsSearchItem = {
 export type AuctionGoodsSearchResponse = ApiListResponse<AuctionGoodsSearchItem>
 export type AuctionSearchMode = 'standard' | 'comprehensive' | 'npl' | 'special'
 
+export type CourtDivisionOption = {
+  division_number: number
+  division_name: string | null
+}
+
+export type CourtDivisionOptionsResponse = {
+  court_code: string
+  items: CourtDivisionOption[]
+}
+
 export type SortBy =
   | 'auction_date_asc'
   | 'auction_date_desc'
@@ -136,4 +146,11 @@ export function searchGoods(
 
 export function getSpecialGoodsTypes() {
   return apiRequest<{ items: string[] }>('/api/v1/search/special/types')
+}
+
+export function getCourtDivisionOptions(courtCode: string, signal?: AbortSignal) {
+  return apiRequest<CourtDivisionOptionsResponse>(
+    `/api/v1/search/options/courts/${encodeURIComponent(courtCode)}/divisions`,
+    signal ? { signal } : undefined,
+  )
 }

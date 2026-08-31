@@ -62,7 +62,7 @@ export default function SpecialSearchPage() {
 
   return (
     <Layout>
-      <div className="w-full flex-grow bg-slate-50 px-4 py-8">
+      <div className="w-full flex-grow bg-slate-50 px-4 py-5">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
           <div className="flex items-center gap-3">
             <div className="rounded-xl border border-gray-100 bg-white p-2.5 shadow-sm">
@@ -105,7 +105,7 @@ export default function SpecialSearchPage() {
                       key={type}
                       type="button"
                       onClick={() => toggleType(type)}
-                      className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-left text-sm font-bold transition-colors ${
+                      className={`flex items-center gap-2 rounded-xl border py-3 pl-5 pr-1 text-left text-sm font-bold transition-colors ${
                         isSelected
                           ? 'border-indigo-500 bg-indigo-50 text-indigo-800'
                           : 'border-gray-200 text-gray-600 hover:border-indigo-200 hover:bg-indigo-50/50'

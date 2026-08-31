@@ -1,6 +1,7 @@
 import {
   clearAuthSession,
   clearLegacyRefreshToken,
+  getAuthSessionSnapshot,
   getStoredAccessToken,
   isAccessTokenExpiring,
   peekLegacyRefreshToken,
@@ -50,6 +51,20 @@ function hasKorean(value: string) {
 
 function normalizeMessage(value: string) {
   return value.trim().toLowerCase()
+}
+
+export function isNetworkRequestError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const normalized = normalizeMessage(error.message)
+  return (
+    normalized.includes('failed to fetch') ||
+    normalized.includes('networkerror') ||
+    normalized.includes('network error') ||
+    normalized.includes('load failed')
+  )
 }
 
 function getStatusFallback(status: number, fallback: string) {
@@ -107,13 +122,8 @@ export function getKoreanErrorMessage(error: unknown, fallback = '요청 처리�
       : getStatusFallback(error.status, fallback)
   }
 
-  if (
-    normalized.includes('failed to fetch') ||
-    normalized.includes('networkerror') ||
-    normalized.includes('network error') ||
-    normalized.includes('load failed')
-  ) {
-    return '네트워크 연결을 확인한 뒤 다시 시도해 주세요.'
+  if (isNetworkRequestError(error)) {
+    return '서비스에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
   }
 
   if (normalized.includes('aborted') || normalized.includes('aborterror')) {
@@ -259,47 +269,83 @@ function isAccessTokenError(data: unknown) {
 }
 
 const REFRESH_REQUEST_TIMEOUT_MILLISECONDS = 7_000
+const SESSION_INITIALIZATION_TIMEOUT_MILLISECONDS = 2_500
+
+type RefreshRequestPolicy = {
+  retryTransientFailure: boolean
+  timeoutMilliseconds: number
+}
+
+type RefreshExecution = {
+  cancelled: boolean
+  controller: AbortController | null
+}
 
 let refreshRequest: Promise<void> | null = null
+let activeRefreshExecution: RefreshExecution | null = null
 
-function requestRefreshedSession() {
+function requestRefreshedSession(
+  policy: RefreshRequestPolicy,
+  execution: RefreshExecution,
+) {
   const legacyRefreshToken = peekLegacyRefreshToken()
   const attempt = () => {
     const controller = new AbortController()
+    execution.controller = controller
     const timeout = setTimeout(
       () => controller.abort(),
-      REFRESH_REQUEST_TIMEOUT_MILLISECONDS,
+      policy.timeoutMilliseconds,
     )
 
     return apiRequest<AuthSessionPayload>('/api/v1/refresh', {
       method: 'POST',
       signal: controller.signal,
-      body: JSON.stringify(
-        legacyRefreshToken ? { refresh_token: legacyRefreshToken } : {},
-      ),
-    }).finally(() => clearTimeout(timeout))
+      body: legacyRefreshToken
+        ? JSON.stringify({ refresh_token: legacyRefreshToken })
+        : undefined,
+    }).finally(() => {
+      clearTimeout(timeout)
+      if (execution.controller === controller) {
+        execution.controller = null
+      }
+    })
   }
 
   return attempt().catch((error: unknown) => {
-    if (!(error instanceof ApiError) || error.status >= 500) {
+    if (
+      policy.retryTransientFailure &&
+      !execution.cancelled &&
+      (!(error instanceof ApiError) || error.status >= 500)
+    ) {
       return attempt()
     }
     throw error
   })
 }
 
-export async function refreshAuthSession() {
+function runAuthSessionRefresh(policy: RefreshRequestPolicy) {
   if (refreshRequest) {
     return refreshRequest
   }
 
-  const request = requestRefreshedSession()
+  const sessionAtRequestStart = getAuthSessionSnapshot()
+  const execution: RefreshExecution = {
+    cancelled: false,
+    controller: null,
+  }
+  activeRefreshExecution = execution
+
+  const request = requestRefreshedSession(policy, execution)
     .then((response) => {
+      if (getAuthSessionSnapshot() !== sessionAtRequestStart) {
+        return
+      }
       clearLegacyRefreshToken()
       replaceAuthSession(response)
     })
     .catch((error: unknown) => {
       if (
+        getAuthSessionSnapshot() === sessionAtRequestStart &&
         error instanceof ApiError &&
         [400, 401, 422].includes(error.status)
       ) {
@@ -308,6 +354,9 @@ export async function refreshAuthSession() {
       throw error
     })
     .finally(() => {
+      if (activeRefreshExecution === execution) {
+        activeRefreshExecution = null
+      }
       if (refreshRequest === request) {
         refreshRequest = null
       }
@@ -317,8 +366,26 @@ export async function refreshAuthSession() {
   return request
 }
 
+export function cancelAuthSessionRefresh() {
+  if (!activeRefreshExecution) {
+    return
+  }
+  activeRefreshExecution.cancelled = true
+  activeRefreshExecution.controller?.abort()
+}
+
+export function refreshAuthSession() {
+  return runAuthSessionRefresh({
+    retryTransientFailure: true,
+    timeoutMilliseconds: REFRESH_REQUEST_TIMEOUT_MILLISECONDS,
+  })
+}
+
 export function initializeAuthSession() {
-  return refreshAuthSession()
+  return runAuthSessionRefresh({
+    retryTransientFailure: false,
+    timeoutMilliseconds: SESSION_INITIALIZATION_TIMEOUT_MILLISECONDS,
+  })
 }
 
 async function resolveBearerToken() {

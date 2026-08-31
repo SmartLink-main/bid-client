@@ -426,7 +426,27 @@ export default function SignupPage() {
               <label className="flex items-start gap-3 cursor-pointer group">
                 <input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} className="w-5 h-5 mt-0.5 text-blue-900 bg-gray-100 border-gray-300 rounded focus:ring-blue-900 focus:ring-2 cursor-pointer" />
                 <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors leading-relaxed">
-                  [필수] 이용약관 및 개인정보 수집·이용에 동의합니다.
+                  [필수]{' '}
+                  <Link
+                    to="/terms-of-service"
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(event) => event.stopPropagation()}
+                    className="font-bold text-blue-800 underline underline-offset-4"
+                  >
+                    이용약관
+                  </Link>
+                  {' '}및{' '}
+                  <Link
+                    to="/privacy-policy#collection-consent"
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(event) => event.stopPropagation()}
+                    className="font-bold text-blue-800 underline underline-offset-4"
+                  >
+                    개인정보 수집·이용 안내
+                  </Link>
+                  에 동의합니다.
                 </span>
               </label>
             </div>

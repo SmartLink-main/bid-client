@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { getApiUrl } from '../lib/api'
 import { getSafeInternalReturnTo } from '../lib/navigation'
 
@@ -32,12 +32,14 @@ export default function KakaoAuthButton({
   disabled = false,
 }: KakaoAuthButtonProps) {
   const [isStarting, setIsStarting] = useState(false)
+  const startInFlight = useRef(false)
 
-  const handleClick = async () => {
-    if (isStarting || disabled) {
+  const handleClick = () => {
+    if (startInFlight.current || disabled) {
       return
     }
 
+    startInFlight.current = true
     setIsStarting(true)
     const query = new URLSearchParams({
       return_to: getSafeInternalReturnTo(returnTo),
@@ -49,7 +51,7 @@ export default function KakaoAuthButton({
   return (
     <button
       type="button"
-      onClick={() => void handleClick()}
+      onClick={handleClick}
       disabled={disabled || isStarting}
       className="flex w-full items-center justify-center gap-2.5 rounded-[12px] bg-[#FEE500] px-5 py-4 text-base font-bold text-[#191919] shadow-sm transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#191919] disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500"
       style={{ fontFamily: 'system-ui, sans-serif' }}

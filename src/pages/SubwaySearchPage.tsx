@@ -29,6 +29,14 @@ function optionalAmount(value: string) {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : Number.NaN
 }
 
+function formatAmountInput(value: string, currentValue: string) {
+  const digits = value.replaceAll(',', '')
+  if (!/^\d*$/.test(digits)) return currentValue
+  if (!digits) return ''
+  const normalized = digits.replace(/^0+(?=\d)/, '')
+  return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
 function parseUsage(value: string) {
   const items = value.split(',').map((item) => item.trim()).filter(Boolean)
   return items.length ? items : undefined
@@ -88,7 +96,6 @@ export default function SubwaySearchPage() {
   const [isStationLoading, setIsStationLoading] = useState(false)
   const [stationError, setStationError] = useState('')
   const [radiusM, setRadiusM] = useState(1000)
-  const [query, setQuery] = useState('')
   const [region, setRegion] = useState('')
   const [goodsUsage, setGoodsUsage] = useState('')
   const [minPrice, setMinPrice] = useState('')
@@ -207,7 +214,6 @@ export default function SubwaySearchPage() {
     return {
       station_id: selectedStation.station_id,
       radius_m: radiusM,
-      q: query.trim() || undefined,
       region: region.trim() || undefined,
       goods_usage: parseUsage(goodsUsage),
       min_lowest_sale_price: parsedMinPrice,
@@ -232,8 +238,8 @@ export default function SubwaySearchPage() {
 
   return (
     <Layout>
-      <div className="w-full flex-grow bg-slate-50 px-4 py-6">
-        <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-5">
+      <div className="w-full flex-grow bg-slate-50 px-4 py-5">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <h1 className="flex items-center gap-2 text-2xl font-extrabold text-slate-900"><TrainFront className="h-6 w-6 text-indigo-600" /> 역세권 경매물건 찾기</h1>
@@ -288,12 +294,11 @@ export default function SubwaySearchPage() {
               </div>
             </fieldset>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-              <label className="xl:col-span-2"><span className="sr-only">통합 검색어</span><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="사건번호, 건물명, 주소" className="w-full rounded-xl border border-gray-200 py-3 pl-10 pr-3 text-sm outline-none focus:border-indigo-500" /></div></label>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <input value={region} onChange={(event) => setRegion(event.target.value)} placeholder="지역 (예: 강남구)" aria-label="지역" className="rounded-xl border border-gray-200 px-3 py-3 text-sm outline-none focus:border-indigo-500" />
               <input value={goodsUsage} onChange={(event) => setGoodsUsage(event.target.value)} placeholder="용도 (아파트, 상가)" aria-label="물건 용도" className="rounded-xl border border-gray-200 px-3 py-3 text-sm outline-none focus:border-indigo-500" />
-              <input inputMode="numeric" value={minPrice} onChange={(event) => setMinPrice(event.target.value)} placeholder="최저가 최소" aria-label="최저가 최소" className="rounded-xl border border-gray-200 px-3 py-3 text-sm outline-none focus:border-indigo-500" />
-              <input inputMode="numeric" value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)} placeholder="최저가 최대" aria-label="최저가 최대" className="rounded-xl border border-gray-200 px-3 py-3 text-sm outline-none focus:border-indigo-500" />
+              <input inputMode="numeric" value={minPrice} onChange={(event) => setMinPrice(formatAmountInput(event.target.value, minPrice))} placeholder="최저가 최소" aria-label="최저가 최소" className="rounded-xl border border-gray-200 px-3 py-3 text-sm outline-none focus:border-indigo-500" />
+              <input inputMode="numeric" value={maxPrice} onChange={(event) => setMaxPrice(formatAmountInput(event.target.value, maxPrice))} placeholder="최저가 최대" aria-label="최저가 최대" className="rounded-xl border border-gray-200 px-3 py-3 text-sm outline-none focus:border-indigo-500" />
             </div>
             <div className="mt-4 flex items-center justify-between gap-3">
               <p className="text-xs text-gray-500">역은 자동완성 결과에서 선택해야 정확한 역 ID와 좌표가 적용됩니다.</p>

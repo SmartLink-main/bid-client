@@ -11,7 +11,6 @@ import SearchResultsPage from './pages/SearchResultsPage';
 import GoodsDetailPage from './pages/GoodsDetailPage';
 import SpecialSearchPage from './pages/SpecialSearchPage';
 import AdvancedSearchPage from './pages/AdvancedSearchPage';
-import MapSearchPage from './pages/MapSearchPage';
 import SubwaySearchPage from './pages/SubwaySearchPage';
 import NplSearchPage from './pages/NplSearchPage';
 import ScheduledSearchPage from './pages/ScheduledSearchPage';
@@ -20,29 +19,23 @@ import AuctionScheduleDetailPage from './pages/AuctionScheduleDetailPage';
 import QuestionGoodsPage from './pages/QuestionGoodsPage';
 import AccountPage from './pages/AccountPage';
 import AdminUsersPage from './pages/AdminUsersPage';
+import AdminInquiriesPage from './pages/AdminInquiriesPage';
+import SupportPage from './pages/SupportPage';
 import SystemStatusPage from './pages/SystemStatusPage';
 import FavoritesPage from './pages/FavoritesPage';
 import KakaoAuthCallbackPage from './pages/KakaoAuthCallbackPage';
+import { PrivacyPolicyPage, ServiceTermsPage } from './pages/LegalPolicyPage';
 import { useAuthSession } from './hooks/useAuthSession';
 import { initializeAuthSession } from './lib/api';
 import { getSafeInternalReturnTo } from './lib/navigation';
 
 function PublicOnlyRoute({
   children,
-  isInitializingSession,
 }: {
   children: ReactNode;
-  isInitializingSession: boolean;
 }) {
   const authSession = useAuthSession();
   const location = useLocation();
-  if (isInitializingSession) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-sm text-gray-500" role="status">
-        인증 정보를 확인하고 있습니다.
-      </div>
-    );
-  }
   const locationState = location.state as { returnTo?: unknown } | null;
   const returnTo = getSafeInternalReturnTo(locationState?.returnTo);
   return authSession ? <Navigate to={returnTo} replace /> : children;
@@ -51,9 +44,11 @@ function PublicOnlyRoute({
 function AuthenticatedRoute({
   children,
   isInitializingSession,
+  message = '관심물건과 내 계정 기능은 로그인 후 이용할 수 있습니다.',
 }: {
   children: ReactNode;
   isInitializingSession: boolean;
+  message?: string;
 }) {
   const authSession = useAuthSession();
   const location = useLocation();
@@ -70,7 +65,7 @@ function AuthenticatedRoute({
       replace
       state={{
         returnTo: `${location.pathname}${location.search}${location.hash}`,
-        message: '관심물건과 내 계정 기능은 로그인 후 이용할 수 있습니다.',
+        message,
       }}
     />
   );
@@ -103,8 +98,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<MainPage />} />
-      <Route path="/login" element={<PublicOnlyRoute isInitializingSession={isInitializingSession}><LoginPage /></PublicOnlyRoute>} />
-      <Route path="/signup" element={<PublicOnlyRoute isInitializingSession={isInitializingSession}><SignupPage /></PublicOnlyRoute>} />
+      <Route path="/login" element={<PublicOnlyRoute><LoginPage /></PublicOnlyRoute>} />
+      <Route path="/signup" element={<PublicOnlyRoute><SignupPage /></PublicOnlyRoute>} />
       <Route path="/auth/kakao/callback" element={<KakaoAuthCallbackPage />} />
       {/* 2. /knowledge 주소로 접속하면 지식경매창고를 띄우도록 설정 */}
       <Route path="/knowledge" element={<KnowledgePage />} />
@@ -113,7 +108,6 @@ function AppRoutes() {
       <Route path="/type-search" element={<PropertyTypeSearchPage />} />
       <Route path="/special-search" element={<SpecialSearchPage />} />
       <Route path="/advanced-search" element={<AdvancedSearchPage />} />
-      <Route path="/map-search" element={<MapSearchPage />} />
       <Route path="/subway-search" element={<SubwaySearchPage />} />
       <Route path="/npl-search" element={<NplSearchPage />} />
       <Route path="/scheduled-search" element={<ScheduledSearchPage />} />
@@ -123,6 +117,8 @@ function AppRoutes() {
       <Route path="/search" element={<SearchResultsPage />} />
       <Route path="/goods/:auctionGoodsId" element={<GoodsDetailPage />} />
       <Route path="/system-status" element={<SystemStatusPage />} />
+      <Route path="/terms-of-service" element={<ServiceTermsPage />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
       <Route
         path="/favorites"
         element={(
@@ -140,10 +136,32 @@ function AppRoutes() {
         )}
       />
       <Route
+        path="/support"
+        element={(
+          <AuthenticatedRoute
+            isInitializingSession={isInitializingSession}
+            message="1:1 문의는 로그인 후 이용할 수 있습니다."
+          >
+            <SupportPage />
+          </AuthenticatedRoute>
+        )}
+      />
+      <Route
         path="/admin/users"
         element={(
           <AuthenticatedRoute isInitializingSession={isInitializingSession}>
             <AdminUsersPage />
+          </AuthenticatedRoute>
+        )}
+      />
+      <Route
+        path="/admin/inquiries"
+        element={(
+          <AuthenticatedRoute
+            isInitializingSession={isInitializingSession}
+            message="관리자 기능은 로그인 후 이용할 수 있습니다."
+          >
+            <AdminInquiriesPage />
           </AuthenticatedRoute>
         )}
       />

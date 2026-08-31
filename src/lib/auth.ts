@@ -1,4 +1,11 @@
-import { apiRequest } from './api'
+import { apiRequest, cancelAuthSessionRefresh } from './api'
+
+export const AUTH_METHOD = {
+  PASSWORD: 'password',
+  KAKAO: 'kakao',
+} as const
+
+export type AuthMethod = string
 
 export type LoginRequest = {
   login_id: string
@@ -40,10 +47,10 @@ export type SignupSmsVerifyResponse = {
 export type AppUser = {
   id: string
   login_id: string | null
-  phone_number: string | null
+  phone_number: string
   name: string | null
   access_group: 'general' | 'supporter' | 'legal_agent' | 'admin'
-  auth_methods: Array<'password' | 'kakao'>
+  auth_methods: AuthMethod[]
   has_password: boolean
   created_at: string
   last_login_at: string | null
@@ -64,9 +71,54 @@ export type MeResponse = {
 export type KakaoAuthExchangeRequest = {
   ticket: string
   terms_accepted: boolean
-  terms_version: string
   privacy_accepted: boolean
-  privacy_version: string
+  name?: string
+  phone_number?: string
+  sms_verification_token?: string
+}
+
+export type KakaoSignupContextResponse = {
+  name: string | null
+  phone_number: string | null
+  phone_number_verified_by_kakao: boolean
+  account_link_required: boolean
+}
+
+type KakaoAccountLinkRequestBase = {
+  ticket: string
+  phone_number?: string
+}
+
+export type KakaoAccountLinkRequest = KakaoAccountLinkRequestBase & (
+  | {
+      login_id: string
+      password: string
+      sms_verification_token?: never
+    }
+  | {
+      login_id: string
+      password?: never
+      sms_verification_token: string
+    }
+)
+
+export type KakaoAccountLinkSmsRequest = {
+  ticket: string
+  phone_number?: string
+}
+
+export type KakaoAccountLinkSmsVerifyRequest = KakaoAccountLinkSmsRequest & {
+  code: string
+  challenge_id: string
+}
+
+export type KakaoAccountLinkStartRequest = {
+  password: string
+  return_to?: string
+}
+
+export type KakaoAccountLinkStartResponse = {
+  authorization_url: string
 }
 
 export type KakaoDeleteStartResponse = {
@@ -90,6 +142,7 @@ export function verifySignupSmsCode(payload: SignupSmsVerifyRequest) {
 }
 
 export function signup(payload: SignupRequest) {
+  cancelAuthSessionRefresh()
   return apiRequest<AuthResponse>('/api/v1/signup', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -97,6 +150,7 @@ export function signup(payload: SignupRequest) {
 }
 
 export function login(payload: LoginRequest) {
+  cancelAuthSessionRefresh()
   return apiRequest<AuthResponse>('/api/v1/login', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -104,8 +158,47 @@ export function login(payload: LoginRequest) {
 }
 
 export function exchangeKakaoAuth(payload: KakaoAuthExchangeRequest) {
+  cancelAuthSessionRefresh()
   return apiRequest<AuthResponse>('/api/v1/oauth/kakao/exchange', {
     method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function getKakaoSignupContext(ticket: string) {
+  return apiRequest<KakaoSignupContextResponse>('/api/v1/oauth/kakao/signup-context', {
+    method: 'POST',
+    body: JSON.stringify({ ticket }),
+  })
+}
+
+export function linkKakaoAccount(payload: KakaoAccountLinkRequest) {
+  cancelAuthSessionRefresh()
+  return apiRequest<AuthResponse>('/api/v1/oauth/kakao/link', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function requestKakaoAccountLinkSmsCode(payload: KakaoAccountLinkSmsRequest) {
+  return apiRequest<SignupSmsChallengeResponse>('/api/v1/oauth/kakao/link/sms', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function verifyKakaoAccountLinkSmsCode(payload: KakaoAccountLinkSmsVerifyRequest) {
+  return apiRequest<SignupSmsVerifyResponse>('/api/v1/oauth/kakao/link/sms/verify', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function startKakaoAccountLink(payload: KakaoAccountLinkStartRequest) {
+  return apiRequest<KakaoAccountLinkStartResponse>('/api/v1/oauth/kakao/link/start', {
+    method: 'POST',
+    auth: 'bearer',
+    authErrorMode: 'access-token',
     body: JSON.stringify(payload),
   })
 }

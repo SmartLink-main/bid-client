@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Gavel, Menu, X, Landmark, MapPin, Building, BadgePercent, 
-  ArrowDownToLine, ArrowUpToLine, Gem, Briefcase, 
-  BookOpen, Headphones, Info, CalendarRange, SlidersHorizontal,
-  MapPinned, TrainFront, Clock3, MessageCircleQuestion, UserRound,
-  UsersRound, Activity, Heart,
+  Gem, Briefcase,
+  BookOpen, Headphones, CalendarRange, SlidersHorizontal,
+  TrainFront, Clock3, UserRound,
+  UsersRound, Heart, MessageSquareReply,
 } from 'lucide-react';
 import { useAuthSession } from '../hooks/useAuthSession';
 import { logout } from '../lib/auth';
@@ -88,8 +88,8 @@ export default function Layout({ children }: LayoutProps) {
       <footer className="w-full flex justify-center py-6 text-gray-400 text-sm bg-white mt-10 border-t border-gray-100">
         <div className="w-full max-w-7xl px-6 md:px-10 flex flex-col md:flex-row justify-between items-center gap-2 md:gap-4 text-center">
           <div className="flex justify-center gap-4">
-            <a href="#" className="hover:text-gray-600 transition-colors">이용약관</a>
-            <a href="#" className="hover:text-gray-600 transition-colors">개인정보처리방침</a>
+            <Link to="/terms-of-service" className="hover:text-gray-600 transition-colors">이용약관</Link>
+            <Link to="/privacy-policy" className="hover:text-gray-600 transition-colors">개인정보처리방침</Link>
             <Link to="/system-status" className="hover:text-gray-600 transition-colors">시스템 상태</Link>
           </div>
           <p className="mt-2 md:mt-0">&copy; 2026 bid. All rights reserved.</p>
@@ -128,26 +128,11 @@ export default function Layout({ children }: LayoutProps) {
           <Link to="/search?half_price=true" className="flex items-center gap-3 p-3 hover:bg-blue-50 hover:text-blue-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
             <BadgePercent className="w-5 h-5 text-gray-400 group-hover:text-blue-600" /> 반값검색
           </Link>
-          <Link to="/search?sort_by=lowest_asc" className="flex items-center gap-3 p-3 hover:bg-blue-50 hover:text-blue-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
-            <ArrowDownToLine className="w-5 h-5 text-gray-400 group-hover:text-blue-600" /> 최저가검색
-          </Link>
-          <Link to="/search?sort_by=lowest_desc" className="flex items-center gap-3 p-3 hover:bg-blue-50 hover:text-blue-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
-            <ArrowUpToLine className="w-5 h-5 text-gray-400 group-hover:text-blue-600" /> 최고가검색
-          </Link>
-          <Link to="/special-search" className="flex items-center gap-3 p-3 hover:bg-blue-50 hover:text-blue-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
-            <Gem className="w-5 h-5 text-gray-400 group-hover:text-blue-600" /> 특수물건검색
-          </Link>
-          <Link to="/npl-search" className="flex items-center gap-3 p-3 hover:bg-blue-50 hover:text-blue-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
-            <Briefcase className="w-5 h-5 text-gray-400 group-hover:text-blue-600" /> NPL 후보분석
-          </Link>
           <Link to="/advanced-search" className="flex items-center gap-3 p-3 hover:bg-blue-50 hover:text-blue-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
             <SlidersHorizontal className="w-5 h-5 text-gray-400 group-hover:text-blue-600" /> 상세조건검색
           </Link>
           <Link to="/schedules" className="flex items-center gap-3 p-3 hover:bg-blue-50 hover:text-blue-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
             <CalendarRange className="w-5 h-5 text-gray-400 group-hover:text-blue-600" /> 경매일정·공고
-          </Link>
-          <Link to="/map-search" className="flex items-center gap-3 p-3 hover:bg-blue-50 hover:text-blue-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
-            <MapPinned className="w-5 h-5 text-gray-400 group-hover:text-blue-600" /> 좌표범위검색
           </Link>
           <Link to="/subway-search" className="flex items-center gap-3 p-3 hover:bg-blue-50 hover:text-blue-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
             <TrainFront className="w-5 h-5 text-gray-400 group-hover:text-blue-600" /> 역세권검색
@@ -155,8 +140,11 @@ export default function Layout({ children }: LayoutProps) {
           <Link to="/scheduled-search" className="flex items-center gap-3 p-3 hover:bg-blue-50 hover:text-blue-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
             <Clock3 className="w-5 h-5 text-gray-400 group-hover:text-blue-600" /> 예정물건검색
           </Link>
-          <Link to="/question-search" className="flex items-center gap-3 p-3 hover:bg-blue-50 hover:text-blue-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
-            <MessageCircleQuestion className="w-5 h-5 text-gray-400 group-hover:text-blue-600" /> 문장으로 물건찾기
+          <Link to="/special-search" className="flex items-center gap-3 p-3 hover:bg-blue-50 hover:text-blue-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
+            <Gem className="w-5 h-5 text-gray-400 group-hover:text-blue-600" /> 특수물건검색
+          </Link>
+          <Link to="/npl-search" className="flex items-center gap-3 p-3 hover:bg-blue-50 hover:text-blue-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
+            <Briefcase className="w-5 h-5 text-gray-400 group-hover:text-blue-600" /> NPL 후보분석
           </Link>
 
           {/* 구분선 */}
@@ -182,9 +170,14 @@ export default function Layout({ children }: LayoutProps) {
                 <UserRound className="w-5 h-5 text-gray-400 group-hover:text-indigo-600" /> 회원정보·탈퇴
               </Link>
               {isAdmin && (
-                <Link to="/admin/users" className="flex items-center gap-3 p-3 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
-                  <UsersRound className="w-5 h-5 text-gray-400 group-hover:text-indigo-600" /> 관리자 회원목록
-                </Link>
+                <>
+                  <Link to="/admin/users" className="flex items-center gap-3 p-3 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
+                    <UsersRound className="w-5 h-5 text-gray-400 group-hover:text-indigo-600" /> 관리자 회원목록
+                  </Link>
+                  <Link to="/admin/inquiries" className="flex items-center gap-3 p-3 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
+                    <MessageSquareReply className="w-5 h-5 text-gray-400 group-hover:text-indigo-600" /> 문의 관리
+                  </Link>
+                </>
               )}
               <hr className="my-3 border-gray-100" />
             </>
@@ -192,16 +185,9 @@ export default function Layout({ children }: LayoutProps) {
 
           {/* 3. 고객지원 카테고리 */}
           <div className="text-xs font-bold text-gray-400 mb-2 pl-3 mt-1">고객지원</div>
-          <Link to="#" className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg text-gray-700 font-medium transition-colors group">
-            <Headphones className="w-5 h-5 text-gray-400 group-hover:text-gray-600" /> 고객센터
+          <Link to="/support" className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
+            <Headphones className="w-5 h-5 text-gray-400 group-hover:text-gray-600" /> 1:1 문의
           </Link>
-          <Link to="#" className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg text-gray-700 font-medium transition-colors group">
-            <Info className="w-5 h-5 text-gray-400 group-hover:text-gray-600" /> 이용안내
-          </Link>
-          <Link to="/system-status" className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
-            <Activity className="w-5 h-5 text-gray-400 group-hover:text-gray-600" /> 시스템 상태
-          </Link>
-
         </div>
       </div>
     </div>

@@ -21,6 +21,7 @@ import {
   normalizeSearchResultSortBy,
   searchResultSortOptions,
 } from '../lib/search-results'
+import { COURT_OPTIONS } from '../lib/search-filter-options'
 import { ArrowUpDown, CalendarDays, ChevronLeft, ChevronRight, Loader2, MapPin, Search } from 'lucide-react'
 
 function parseNumber(value: string | null) {
@@ -94,16 +95,25 @@ function paramsFromSearch(searchParams: URLSearchParams): AuctionSearchParams {
 function useFilterLabels(searchParams: URLSearchParams) {
   return useMemo(() => {
     const labels: string[] = []
+    const courtCode = searchParams.get('court_code')
+    if (courtCode) {
+      const court = COURT_OPTIONS.find((option) => option.courtCode === courtCode)
+      labels.push(`법원: ${court?.branchName || courtCode}`)
+    }
+
     const namedParams = [
       ['q', '검색어'],
       ['court_name', '법원'],
       ['branch_name', '지원'],
       ['division_name', '경매계'],
+      ['auction_kind', '경매종류'],
       ['sido', '시/도'],
       ['sigungu', '시/군/구'],
       ['dong', '읍/면/동'],
       ['region', '지역'],
       ['building_name', '건물명'],
+      ['interested_party_role', '이해관계인 구분'],
+      ['interested_party_name', '이해관계인 이름'],
       ['status', '상태'],
     ] as const
 
@@ -422,8 +432,8 @@ export default function SearchResultsPage() {
 
   return (
     <Layout>
-      <div className="w-full flex-grow bg-slate-50 px-4 py-6">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+      <div className="w-full flex-grow bg-slate-50 px-4 py-5">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
           <div className="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
             <form onSubmit={handleSubmit} className="relative flex-grow">
               <label htmlFor="search-results-query" className="sr-only">경매 물건 검색어</label>

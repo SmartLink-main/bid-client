@@ -2,73 +2,17 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Search, CheckSquare, Square, Layers, X } from 'lucide-react';
-
-const propertyTypes = [
-  {
-    id: 'residential',
-    title: '주거용',
-    items: [
-      '아파트',
-      '단독주택',
-      '다가구주택',
-      '연립주택',
-      '다세대/빌라'
-    ]
-  },
-  {
-    id: 'commercial-industrial',
-    title: '상업용',
-    items: [
-      '상가',
-      '오피스텔',
-      '근린시설'
-    ]
-  },
-  {
-    id: 'land',
-    title: '토지',
-    items: [
-      '대지',
-      '임야',
-      '전답'
-    ]
-  },
-  {
-    id: 'vehicle-heavy-equipment',
-    title: '차량 및 중장비',
-    items: ['자동차', '중기']
-  },
-  {
-    id: 'other',
-    title: '기타',
-    items: ['기타']
-  }
-];
-
-const allPropertyItems = propertyTypes.flatMap((category) => category.items);
-
-const goodsUsageValues: Record<string, string[]> = {
-  '아파트': ['아파트'],
-  '단독주택': ['단독주택', '단독주택,다가구주택'],
-  '다가구주택': ['다가구주택', '단독주택,다가구주택'],
-  '연립주택': ['연립주택', '연립주택,다세대,빌라'],
-  '다세대/빌라': ['다세대', '빌라', '연립주택,다세대,빌라'],
-  '상가': ['상가', '상가,오피스텔,근린시설'],
-  '오피스텔': ['오피스텔', '상가,오피스텔,근린시설'],
-  '근린시설': ['근린시설', '상가,오피스텔,근린시설'],
-  '대지': ['대지', '대지,임야,전답'],
-  '임야': ['임야', '대지,임야,전답'],
-  '전답': ['전답', '대지,임야,전답'],
-  '자동차': ['자동차', '자동차,중기'],
-  '중기': ['중기', '자동차,중기'],
-  '기타': ['기타'],
-};
+import {
+  ALL_PROPERTY_TYPE_ITEMS,
+  GOODS_USAGE_VALUES_BY_PROPERTY_TYPE,
+  PROPERTY_TYPE_GROUPS,
+} from '../lib/search-filter-options';
 
 export default function PropertyTypeSearchPage() {
   const navigate = useNavigate();
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
 
-  const isAllSelected = selectedTypes.length === allPropertyItems.length;
+  const isAllSelected = selectedTypes.length === ALL_PROPERTY_TYPE_ITEMS.length;
 
   const toggleType = (item: string) => {
     setSelectedTypes((prev) =>
@@ -77,7 +21,7 @@ export default function PropertyTypeSearchPage() {
   };
 
   const toggleAll = () => {
-    setSelectedTypes(isAllSelected ? [] : allPropertyItems);
+    setSelectedTypes(isAllSelected ? [] : ALL_PROPERTY_TYPE_ITEMS);
   };
 
   const toggleCategory = (items: string[]) => {
@@ -103,7 +47,7 @@ export default function PropertyTypeSearchPage() {
 
     const searchParams = new URLSearchParams();
     const apiValues = new Set(
-      selectedTypes.flatMap((type) => goodsUsageValues[type] || []),
+      selectedTypes.flatMap((type) => GOODS_USAGE_VALUES_BY_PROPERTY_TYPE[type] || []),
     );
     if (apiValues.size === 0) {
       alert('선택한 물건종류는 현재 검색 API에서 지원하지 않습니다.');
@@ -116,7 +60,7 @@ export default function PropertyTypeSearchPage() {
   return (
     <Layout>
       <div className="w-full flex-grow bg-slate-50 py-5 px-4 flex flex-col min-h-[85vh]">
-        <div className="w-full max-w-6xl mx-auto flex-grow flex flex-col">
+        <div className="w-full max-w-5xl mx-auto flex-grow flex flex-col">
           <div className="flex items-center gap-3 mb-5">
             <div className="p-2.5 bg-white rounded-xl shadow-sm border border-gray-100">
               <Layers className="w-6 h-6 text-indigo-600" />
@@ -144,7 +88,7 @@ export default function PropertyTypeSearchPage() {
             </div>
 
             <div className="divide-y divide-gray-100 bg-white">
-              {propertyTypes.map((category) => {
+              {PROPERTY_TYPE_GROUPS.map((category) => {
                 const selectedCount = category.items.filter((item) => selectedTypes.includes(item)).length;
                 const isCategoryAllSelected = selectedCount === category.items.length;
                 const hasCategorySelection = selectedCount > 0;
@@ -153,7 +97,7 @@ export default function PropertyTypeSearchPage() {
                   <div key={category.id} className="flex flex-col md:flex-row md:items-start">
                     <button
                       onClick={() => toggleCategory(category.items)}
-                      className="flex w-full items-center gap-2 bg-slate-50 px-5 py-4 text-left transition-colors hover:bg-indigo-50 md:w-48 md:self-stretch md:border-r md:border-gray-100"
+                      className="flex w-full items-center gap-2 bg-slate-50 py-4 pl-7 pr-3 text-left transition-colors hover:bg-indigo-50 md:w-48 md:self-stretch md:border-r md:border-gray-100"
                     >
                       {isCategoryAllSelected ? (
                         <CheckSquare className="w-5 h-5 shrink-0 text-indigo-600" />
@@ -180,7 +124,7 @@ export default function PropertyTypeSearchPage() {
                           <button
                             key={item}
                             onClick={() => toggleType(item)}
-                            className={`flex min-h-8 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${
+                            className={`flex min-h-8 items-center gap-2 rounded-lg py-1.5 pl-4 pr-0 text-left transition-colors ${
                               isChecked ? 'bg-indigo-50' : 'hover:bg-slate-50'
                             }`}
                           >

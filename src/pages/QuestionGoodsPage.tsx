@@ -19,9 +19,27 @@ function displayText(value: string | number | null | undefined, fallback = '-') 
   return fallback
 }
 
+function interpretationBadge(result: QuestionGoodsResponse) {
+  if (result.interpretation.method === 'ai') {
+    return {
+      label: 'AI 분석',
+      className: 'bg-violet-100 text-violet-700',
+    }
+  }
+  if (result.interpretation.fallback_used) {
+    return {
+      label: '기본 분석으로 검색',
+      className: 'bg-amber-100 text-amber-800',
+    }
+  }
+  return {
+    label: '기본 분석',
+    className: 'bg-slate-100 text-slate-700',
+  }
+}
+
 export default function QuestionGoodsPage() {
   const [question, setQuestion] = useState('')
-  const [limit, setLimit] = useState(10)
   const [result, setResult] = useState<QuestionGoodsResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -34,16 +52,12 @@ export default function QuestionGoodsPage() {
       setErrorMessage('질문을 두 글자 이상 입력해 주세요.')
       return
     }
-    if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
-      setErrorMessage('결과 수는 1개 이상 50개 이하로 입력해 주세요.')
-      return
-    }
 
     setIsLoading(true)
     setErrorMessage('')
     setResult(null)
 
-    void askGoodsQuestion({ question: normalizedQuestion, limit })
+    void askGoodsQuestion({ question: normalizedQuestion })
       .then(setResult)
       .catch((error: unknown) => {
         setErrorMessage(
@@ -55,8 +69,8 @@ export default function QuestionGoodsPage() {
 
   return (
     <Layout>
-      <div className="w-full flex-grow bg-slate-50 px-4 py-8">
-        <div className="mx-auto w-full max-w-6xl">
+      <div className="w-full flex-grow bg-slate-50 px-4 py-5">
+        <div className="mx-auto w-full max-w-5xl">
           <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-950 via-indigo-900 to-blue-800 px-6 py-10 text-white shadow-lg md:px-10">
             <div className="max-w-3xl">
               <span className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-extrabold text-indigo-100">
@@ -66,7 +80,7 @@ export default function QuestionGoodsPage() {
                 원하는 경매 물건을 문장으로 찾아보세요
               </h1>
               <p className="mt-3 text-sm leading-7 text-indigo-100 md:text-base">
-                지역, 용도, 건물명, 권리관계와 예산을 함께 적으면 저장된 물건을 규칙 기반으로 점수화해 추천합니다.
+                AI가 지역, 용도, 건물명, 권리관계와 예산을 해석하고 서버가 검증한 조건으로 저장된 물건을 검색합니다. AI를 사용할 수 없을 때는 기본 분석으로 이어집니다.
               </p>
             </div>
 
@@ -85,21 +99,6 @@ export default function QuestionGoodsPage() {
                     required
                   />
                 </div>
-                <div className="flex items-center gap-2">
-                  <label htmlFor="goods-question-limit" className="whitespace-nowrap text-xs font-bold text-gray-500">
-                    결과 수
-                  </label>
-                  <input
-                    id="goods-question-limit"
-                    type="number"
-                    min={1}
-                    max={50}
-                    step={1}
-                    value={limit}
-                    onChange={(event) => setLimit(Number(event.target.value))}
-                    className="h-12 w-20 rounded-lg border border-gray-200 px-3 text-center text-sm font-extrabold outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                  />
-                </div>
                 <button
                   type="submit"
                   disabled={isLoading}
@@ -116,8 +115,8 @@ export default function QuestionGoodsPage() {
             <button type="button" onClick={() => setQuestion('서울 5억 이하 아파트 찾아줘')} className="rounded-full border border-gray-200 bg-white px-3 py-2 hover:border-indigo-300 hover:text-indigo-700">
               서울 5억 이하 아파트
             </button>
-            <button type="button" onClick={() => setQuestion('인수권리 없는 주거용 물건 찾아줘')} className="rounded-full border border-gray-200 bg-white px-3 py-2 hover:border-indigo-300 hover:text-indigo-700">
-              인수권리 없는 주거용
+            <button type="button" onClick={() => setQuestion('유치권 있는 주거용 물건 찾아줘')} className="rounded-full border border-gray-200 bg-white px-3 py-2 hover:border-indigo-300 hover:text-indigo-700">
+              유치권 있는 주거용
             </button>
             <button type="button" onClick={() => setQuestion('부산 상가 경매 물건 추천')} className="rounded-full border border-gray-200 bg-white px-3 py-2 hover:border-indigo-300 hover:text-indigo-700">
               부산 상가
@@ -142,7 +141,16 @@ export default function QuestionGoodsPage() {
             <section className="mt-8">
               <div className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-xs font-extrabold text-indigo-600">분석한 질문</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-xs font-extrabold text-indigo-600">분석한 질문</p>
+                    <span
+                      aria-label={interpretationBadge(result).label}
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${interpretationBadge(result).className}`}
+                      role="status"
+                    >
+                      {interpretationBadge(result).label}
+                    </span>
+                  </div>
                   <h2 className="mt-1 text-xl font-extrabold text-slate-900">“{result.question}”</h2>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {result.parsed.terms.map((term) => (

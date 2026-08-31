@@ -306,8 +306,8 @@ export default function NplSearchPage() {
 
   return (
     <Layout>
-      <div className="w-full flex-grow bg-slate-50 px-4 py-6">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
+      <div className="w-full flex-grow bg-slate-50 px-4 py-5">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
           <div>
             <h1 className="flex items-center gap-2 text-2xl font-extrabold text-slate-900"><BriefcaseBusiness className="h-6 w-6 text-indigo-600" /> NPL 후보 분석</h1>
             <p className="mt-1 text-sm text-gray-500">경매 사건의 채권·담보 데이터를 근거와 함께 비교해 검토할 후보를 좁힙니다.</p>
