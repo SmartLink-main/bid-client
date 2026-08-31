@@ -1,8 +1,28 @@
 
+import { type FormEvent, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Search } from 'lucide-react';
 
 export default function MainPage() {
+  const navigate = useNavigate();
+  const [query, setQuery] = useState('');
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const searchParams = new URLSearchParams();
+
+    if (query.trim()) {
+      searchParams.set('q', query.trim());
+    }
+
+    navigate(`/search${searchParams.toString() ? `?${searchParams}` : ''}`);
+  };
+
+  const goToRecommendedSearch = (params: Record<string, string>) => {
+    navigate(`/search?${new URLSearchParams(params)}`);
+  };
+
   return (
     <Layout>
       {/* 윗단 여백을 없애고, 아랫단 여백을 pb-16(이전과 처음의 딱 중간)으로 설정하여 시각적 중앙에 배치했습니다. */}
@@ -14,26 +34,28 @@ export default function MainPage() {
           사건번호, 법원, 소재지 등 원하는 조건으로 쉽고 빠르게 검색해 보세요.
         </p>
 
-        <div className="w-full max-w-3xl relative group px-4">
+        <form className="w-full max-w-3xl relative group px-4" onSubmit={handleSubmit}>
           <div className="absolute inset-y-0 left-4 pl-5 flex items-center pointer-events-none">
             <Search className="w-6 h-6 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
           </div>
           <input 
             type="text" 
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
             className="w-full py-4 pl-14 pr-24 text-lg border border-gray-200 rounded-full shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-gray-300" 
             placeholder="예: 2023타경1234, 서울중앙지방법원, 강남구 아파트"
           />
-          <button className="absolute inset-y-0 right-6 flex items-center px-6 my-2 bg-blue-900 hover:bg-blue-800 text-white rounded-full transition-colors font-medium text-sm md:text-base">
+          <button type="submit" className="absolute inset-y-0 right-6 flex items-center px-6 my-2 bg-blue-900 hover:bg-blue-800 text-white rounded-full transition-colors font-medium text-sm md:text-base">
             검색
           </button>
-        </div>
+        </form>
 
         {/* 추천 검색어 태그들 */}
         <div className="flex flex-wrap justify-center gap-2 mt-8 px-4">
-          <button className="px-4 py-2 bg-gray-50 border border-gray-100 rounded-full text-sm text-gray-600 hover:bg-gray-100 transition-colors"># 서울 아파트</button>
-          <button className="px-4 py-2 bg-gray-50 border border-gray-100 rounded-full text-sm text-gray-600 hover:bg-gray-100 transition-colors"># 유찰 2회 이상</button>
-          <button className="px-4 py-2 bg-gray-50 border border-gray-100 rounded-full text-sm text-gray-600 hover:bg-gray-100 transition-colors"># 수도권 다세대/빌라</button>
-          <button className="px-4 py-2 bg-gray-50 border border-gray-100 rounded-full text-sm text-gray-600 hover:bg-gray-100 transition-colors"># 신건</button>
+          <button onClick={() => goToRecommendedSearch({ q: '서울 아파트' })} className="px-4 py-2 bg-gray-50 border border-gray-100 rounded-full text-sm text-gray-600 hover:bg-gray-100 transition-colors"># 서울 아파트</button>
+          <button onClick={() => goToRecommendedSearch({ min_failed_count: '2', sort_by: 'failed_count_desc' })} className="px-4 py-2 bg-gray-50 border border-gray-100 rounded-full text-sm text-gray-600 hover:bg-gray-100 transition-colors"># 유찰 2회 이상</button>
+          <button onClick={() => goToRecommendedSearch({ q: '서울 다세대' })} className="px-4 py-2 bg-gray-50 border border-gray-100 rounded-full text-sm text-gray-600 hover:bg-gray-100 transition-colors"># 서울 다세대/빌라</button>
+          <button onClick={() => goToRecommendedSearch({ status: '신건' })} className="px-4 py-2 bg-gray-50 border border-gray-100 rounded-full text-sm text-gray-600 hover:bg-gray-100 transition-colors"># 신건</button>
         </div>
       </div>
     </Layout>
