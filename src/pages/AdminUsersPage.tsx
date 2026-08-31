@@ -165,7 +165,7 @@ export default function AdminUsersPage() {
                   <tbody className="divide-y divide-gray-100">
                     {response.items.map((user) => (
                       <tr key={user.id} className="hover:bg-slate-50">
-                        <td className="whitespace-nowrap px-5 py-4"><span className="font-bold text-slate-900">{user.login_id || '카카오 가입'}</span><span className="ml-2 text-gray-500">{user.name || '-'}</span></td>
+                        <td className="whitespace-nowrap px-5 py-4"><span className="font-bold text-slate-900">{user.login_id ?? '간편가입 계정'}</span><span className="ml-2 text-gray-500">{user.name || '-'}</span></td>
                         <td className="whitespace-nowrap px-5 py-4 text-gray-700">{formatPhoneNumber(user.phone_number)}</td>
                         <td className="whitespace-nowrap px-5 py-4"><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-extrabold text-indigo-700">{user.access_group}</span></td>
                         <td className="whitespace-nowrap px-5 py-4 text-gray-600">{formatDateTime(user.created_at)}</td>

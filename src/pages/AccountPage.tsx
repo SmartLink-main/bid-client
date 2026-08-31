@@ -4,6 +4,7 @@ import { AlertTriangle, KeyRound, Link2, ShieldCheck, UserRound } from 'lucide-r
 import Layout from '../components/Layout'
 import { ApiError, getApiUrl, getKoreanErrorMessage } from '../lib/api'
 import {
+  AUTH_METHOD,
   deleteMe,
   startKakaoAccountDeletion,
   startKakaoAccountLink,
@@ -70,6 +71,16 @@ function isKakaoAuthorizationUrl(value: string) {
 export default function AccountPage() {
   const session = useAuthSession()
   const user = session?.user as AppUser | undefined
+  const externalAuthMethods = user?.auth_methods.filter(
+    (method) => method !== AUTH_METHOD.PASSWORD,
+  ) ?? []
+  const hasKakao = externalAuthMethods.includes(AUTH_METHOD.KAKAO)
+  const canDeleteWithKakao = (
+    externalAuthMethods.length === 1 && hasKakao
+  )
+  const canDeleteWithPassword = Boolean(
+    user?.has_password && externalAuthMethods.length === 0,
+  )
   const [password, setPassword] = useState('')
   const [linkPassword, setLinkPassword] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
@@ -199,7 +210,7 @@ export default function AccountPage() {
             {user && (
               <dl className="mt-5 grid gap-x-6 gap-y-4 sm:grid-cols-2">
                 <div><dt className="text-xs font-bold text-gray-400">이름</dt><dd className="mt-1 font-semibold text-slate-800">{user.name || '-'}</dd></div>
-                <div><dt className="text-xs font-bold text-gray-400">아이디</dt><dd className="mt-1 font-semibold text-slate-800">{user.login_id || '카카오 간편가입'}</dd></div>
+                <div><dt className="text-xs font-bold text-gray-400">아이디</dt><dd className="mt-1 font-semibold text-slate-800">{user.login_id ?? '간편가입 계정'}</dd></div>
                 <div><dt className="text-xs font-bold text-gray-400">휴대폰 번호</dt><dd className="mt-1 font-semibold text-slate-800">{formatPhoneNumber(user.phone_number)}</dd></div>
                 <div><dt className="text-xs font-bold text-gray-400">회원 유형</dt><dd className="mt-1 font-semibold text-slate-800">{ACCESS_GROUP_LABELS[user.access_group]}</dd></div>
                 <div><dt className="text-xs font-bold text-gray-400">가입 일시</dt><dd className="mt-1 font-semibold text-slate-800">{formatDateTime(user.created_at)}</dd></div>
@@ -212,7 +223,7 @@ export default function AccountPage() {
             <h2 id="kakao-link-heading" className="flex items-center gap-2 text-lg font-extrabold text-slate-900">
               <Link2 className="h-5 w-5 text-[#8A7600]" /> 카카오 로그인 연결
             </h2>
-            {user?.auth_methods?.includes('kakao') ? (
+            {hasKakao ? (
               <div className="mt-4 flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-900">
                 <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
                 <div>
@@ -264,7 +275,7 @@ export default function AccountPage() {
             <h2 id="delete-heading" className="flex items-center gap-2 text-lg font-extrabold text-red-700">
               <AlertTriangle className="h-5 w-5" /> 회원 탈퇴
             </h2>
-            {user?.auth_methods?.includes('kakao') ? (
+            {canDeleteWithKakao ? (
               <>
                 <p className="mt-2 text-sm leading-relaxed text-gray-600">
                   카카오에서 다시 로그인해 본인을 확인한 뒤, 카카오 서비스 연결을 해제하고 회원 정보를 삭제합니다.
@@ -278,7 +289,7 @@ export default function AccountPage() {
                   {isDeleting ? '카카오로 이동 중' : '카카오 재인증 후 탈퇴'}
                 </button>
               </>
-            ) : user?.has_password ? (
+            ) : canDeleteWithPassword ? (
               <>
                 <p className="mt-2 text-sm leading-relaxed text-gray-600">
                   현재 비밀번호를 확인한 뒤 회원 레코드를 즉시 삭제합니다. 기존 로그인 토큰도 더 이상 사용할 수 없습니다.
@@ -308,7 +319,7 @@ export default function AccountPage() {
               </>
             ) : (
               <p className="mt-3 text-sm leading-relaxed text-gray-600">
-                사용할 수 있는 재인증 방법을 찾지 못했습니다. 고객지원에 문의해 주세요.
+                연결된 간편로그인을 안전하게 재인증할 수 없어 온라인 탈퇴를 진행할 수 없습니다. 고객지원에 문의해 주세요.
               </p>
             )}
           </section>

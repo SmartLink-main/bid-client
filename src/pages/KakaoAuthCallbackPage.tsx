@@ -40,8 +40,6 @@ type CallbackPayload = {
   returnTo: string
   mode: CallbackMode
   error: string
-  termsVersion: string
-  privacyVersion: string
   accountDeleted: boolean
   accountLinked: boolean
 }
@@ -100,8 +98,6 @@ function getCachedCallbackPayload(): CallbackPayload | null {
     typeof candidate.returnTo !== 'string' ||
     (candidate.mode !== 'login' && candidate.mode !== 'signup') ||
     typeof candidate.error !== 'string' ||
-    typeof candidate.termsVersion !== 'string' ||
-    typeof candidate.privacyVersion !== 'string' ||
     typeof candidate.accountDeleted !== 'boolean' ||
     typeof candidate.accountLinked !== 'boolean'
   ) {
@@ -113,8 +109,6 @@ function getCachedCallbackPayload(): CallbackPayload | null {
     returnTo: getSafeInternalReturnTo(candidate.returnTo),
     mode: candidate.mode,
     error: candidate.error,
-    termsVersion: candidate.termsVersion,
-    privacyVersion: candidate.privacyVersion,
     accountDeleted: candidate.accountDeleted,
     accountLinked: candidate.accountLinked,
   }
@@ -134,8 +128,6 @@ function readAndScrubCallbackPayload(): CallbackPayload {
   const returnTo = getSafeInternalReturnTo(fragment.get('return_to'))
   const mode = fragment.get('mode') === 'signup' ? 'signup' : 'login'
   const error = fragment.get('error')?.trim() ?? ''
-  const termsVersion = fragment.get('terms_version')?.trim() ?? ''
-  const privacyVersion = fragment.get('privacy_version')?.trim() ?? ''
   const accountDeleted = fragment.get('account_deleted') === '1'
   const accountLinked = fragment.get('account_linked') === '1'
   const payload = {
@@ -143,8 +135,6 @@ function readAndScrubCallbackPayload(): CallbackPayload {
     returnTo,
     mode,
     error,
-    termsVersion,
-    privacyVersion,
     accountDeleted,
     accountLinked,
   } satisfies CallbackPayload
@@ -294,8 +284,6 @@ export default function KakaoAuthCallbackPage() {
   const isKakaoPhoneProvided = signupContext?.phone_number != null
   const isKakaoPhoneVerified = canUseKakaoVerifiedPhone(signupContext, phoneNumber)
   const isSmsCodeVerified = smsVerificationToken !== '' && verificationSeconds > 0
-  const effectiveTermsVersion = signupContext?.terms_version ?? payload.termsVersion
-  const effectivePrivacyVersion = signupContext?.privacy_version ?? payload.privacyVersion
 
   const resetSmsVerification = useCallback(() => {
     setChallengeId('')
@@ -326,9 +314,6 @@ export default function KakaoAuthCallbackPage() {
     setMessage('')
     try {
       const response = await getKakaoSignupContext(payload.ticket)
-      if (!response.terms_version || !response.privacy_version) {
-        throw new Error('Kakao signup policy context is incomplete.')
-      }
       setSignupContext(response)
       setNeedsAccountLink(response.account_link_required)
       setName(response.name?.slice(0, NAME_MAX_LENGTH) ?? '')
@@ -467,11 +452,7 @@ export default function KakaoAuthCallbackPage() {
       !payload.ticket ||
       exchangeInFlight.current ||
       isTicketUnavailable ||
-      (hasConsent && (
-        !signupContext ||
-        !effectiveTermsVersion ||
-        !effectivePrivacyVersion
-      ))
+      (hasConsent && !signupContext)
     ) {
       return
     }
@@ -483,9 +464,7 @@ export default function KakaoAuthCallbackPage() {
       const exchangePayload = {
         ticket: payload.ticket,
         terms_accepted: hasConsent,
-        terms_version: hasConsent ? effectiveTermsVersion : payload.termsVersion,
         privacy_accepted: hasConsent,
-        privacy_version: hasConsent ? effectivePrivacyVersion : payload.privacyVersion,
         ...(hasConsent ? {
           name: name.trim() || undefined,
           phone_number: phoneNumber,

@@ -215,7 +215,7 @@ export default function AdminInquiriesPage() {
                               <span className={`truncate text-sm font-extrabold ${selected ? 'text-indigo-800' : 'text-slate-900'}`}>{inquiry.title}</span>
                               <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-extrabold ${inquiry.status === 'answered' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{inquiry.status === 'answered' ? '답변 완료' : '답변 대기'}</span>
                             </div>
-                            <p className="mt-2 truncate text-xs font-bold text-gray-600">{requesterName(inquiry)} <span className="font-normal text-gray-400">· {inquiry.user.login_id || '카카오 가입'}</span></p>
+                            <p className="mt-2 truncate text-xs font-bold text-gray-600">{requesterName(inquiry)} <span className="font-normal text-gray-400">· {inquiry.user.login_id ?? '간편가입 계정'}</span></p>
                             <p className="mt-1 flex items-center gap-1 text-xs text-gray-400"><Clock3 className="h-3 w-3" />{formatDateTime(inquiry.created_at)}</p>
                           </button>
                         )
@@ -234,7 +234,7 @@ export default function AdminInquiriesPage() {
                           <h2 className="break-words text-xl font-extrabold text-slate-900">{selectedInquiry.title}</h2>
                           <span className="shrink-0 text-xs font-bold text-gray-500">{formatDateTime(selectedInquiry.created_at)}</span>
                         </div>
-                        <p className="mt-2 text-sm text-gray-600">작성자 <strong className="text-slate-800">{requesterName(selectedInquiry)}</strong> · {selectedInquiry.user.login_id || '카카오 가입'}</p>
+                        <p className="mt-2 text-sm text-gray-600">작성자 <strong className="text-slate-800">{requesterName(selectedInquiry)}</strong> · {selectedInquiry.user.login_id ?? '간편가입 계정'}</p>
                       </div>
                       <div className="py-5">
                         <h3 className="text-sm font-extrabold text-slate-700">문의 내용</h3>

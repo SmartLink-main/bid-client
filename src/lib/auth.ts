@@ -1,5 +1,12 @@
 import { apiRequest, cancelAuthSessionRefresh } from './api'
 
+export const AUTH_METHOD = {
+  PASSWORD: 'password',
+  KAKAO: 'kakao',
+} as const
+
+export type AuthMethod = string
+
 export type LoginRequest = {
   login_id: string
   password: string
@@ -40,10 +47,10 @@ export type SignupSmsVerifyResponse = {
 export type AppUser = {
   id: string
   login_id: string | null
-  phone_number: string | null
+  phone_number: string
   name: string | null
   access_group: 'general' | 'supporter' | 'legal_agent' | 'admin'
-  auth_methods: Array<'password' | 'kakao'>
+  auth_methods: AuthMethod[]
   has_password: boolean
   created_at: string
   last_login_at: string | null
@@ -64,9 +71,7 @@ export type MeResponse = {
 export type KakaoAuthExchangeRequest = {
   ticket: string
   terms_accepted: boolean
-  terms_version: string
   privacy_accepted: boolean
-  privacy_version: string
   name?: string
   phone_number?: string
   sms_verification_token?: string
@@ -77,8 +82,6 @@ export type KakaoSignupContextResponse = {
   phone_number: string | null
   phone_number_verified_by_kakao: boolean
   account_link_required: boolean
-  terms_version: string
-  privacy_version: string
 }
 
 type KakaoAccountLinkRequestBase = {

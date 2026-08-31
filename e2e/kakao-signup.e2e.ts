@@ -11,6 +11,10 @@ const COLLISION_PASSWORD = 'ExistingLink!2026'
 const SMS_LINK_LOGIN_ID = 'kakaosmslink'
 const SETTINGS_LINK_LOGIN_ID = 'kakaosettings'
 const SETTINGS_LINK_PASSWORD = 'SettingsLink!2026'
+const ADMIN_LOGIN_ID = 'kakaoadmin'
+const ADMIN_PASSWORD = 'AdminSettings!2026'
+const FUTURE_HYBRID_LOGIN_ID = 'futurehybrid'
+const FUTURE_HYBRID_PASSWORD = 'FutureHybrid!2026'
 
 type RequestCounts = {
   smsRequest: number
@@ -24,8 +28,6 @@ type SignupContext = {
   phone_number: string | null
   phone_number_verified_by_kakao: boolean
   account_link_required: boolean
-  terms_version: string
-  privacy_version: string
 }
 
 function apiPath(value: Request | Response) {
@@ -87,7 +89,7 @@ async function openKakaoSignup(page: Page, fakeAccountButton: string) {
 
 async function acceptRequiredPolicies(page: Page) {
   await page.getByLabel(/서비스 이용약관에 동의/).check()
-  await page.getByLabel(/개인정보 수집·이용 안내.*동의/).check()
+  await page.getByLabel(/개인정보 수집·이용 안내에 동의/).check()
 }
 
 async function expectAccountPhone(page: Page, formattedPhone: string) {
@@ -96,6 +98,19 @@ async function expectAccountPhone(page: Page, formattedPhone: string) {
   await expect(
     page.getByRole('region', { name: '회원 정보' }).getByText(formattedPhone, { exact: true }),
   ).toBeVisible()
+}
+
+async function loginWithPassword(page: Page, loginId: string, password: string) {
+  await page.goto('/login')
+  await page.getByLabel('아이디', { exact: true }).fill(loginId)
+  await page.getByLabel('비밀번호', { exact: true }).fill(password)
+  const loginResponsePromise = page.waitForResponse((response) => (
+    apiPath(response) === '/api/v1/login' &&
+    response.request().method() === 'POST'
+  ))
+  await page.getByRole('button', { name: '로그인', exact: true }).click()
+  expect((await loginResponsePromise).status()).toBe(200)
+  await expect(page).toHaveURL('/')
 }
 
 test.describe('카카오 휴대폰 보완 가입 브라우저 E2E', () => {
@@ -418,6 +433,74 @@ test.describe('카카오 휴대폰 보완 가입 브라우저 E2E', () => {
     await expect(
       page.getByRole('region', { name: '회원 정보' }).getByText('기존 SMS 번호 회원', { exact: true }),
     ).toBeVisible()
+  })
+
+  test('관리자는 배치 조회된 전체 인증수단 회원 목록을 화면에서 확인한다', async ({ page }) => {
+    await loginWithPassword(page, ADMIN_LOGIN_ID, ADMIN_PASSWORD)
+
+    await page.getByRole('button', { name: '전체 메뉴 열기' }).click()
+    const usersResponsePromise = page.waitForResponse((response) => (
+      apiPath(response) === '/api/v1/admin/users' &&
+      response.request().method() === 'GET'
+    ))
+    await page.getByRole('link', { name: '관리자 회원목록' }).click()
+    const usersResponse = await usersResponsePromise
+    expect(usersResponse.status()).toBe(200)
+    const payload = await usersResponse.json() as {
+      admin: { login_id: string | null; auth_methods: string[] }
+      items: Array<{
+        login_id: string | null
+        phone_number: string
+        name: string | null
+        auth_methods: string[]
+        has_password: boolean
+      }>
+    }
+    expect(payload.admin).toMatchObject({
+      login_id: ADMIN_LOGIN_ID,
+      auth_methods: ['password'],
+    })
+    expect(payload.items.find((user) => user.phone_number === '01055550109')).toMatchObject({
+      login_id: null,
+      name: '미래 소셜 회원',
+      auth_methods: ['future-provider'],
+      has_password: false,
+    })
+    expect(payload.items.find((user) => user.phone_number === '01055550110')).toMatchObject({
+      login_id: FUTURE_HYBRID_LOGIN_ID,
+      name: '미래 혼합 회원',
+      auth_methods: ['password', 'future-provider'],
+      has_password: true,
+    })
+
+    await expect(page).toHaveURL('/admin/users')
+    await expect(page.getByRole('heading', { name: '회원 관리' })).toBeVisible()
+    const futureProviderRow = page.getByRole('row').filter({ hasText: '미래 소셜 회원' })
+    await expect(futureProviderRow.getByText('간편가입 계정', { exact: true })).toBeVisible()
+    await expect(futureProviderRow.getByText('010-5555-0109', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: '로그아웃', exact: true }).click()
+  })
+
+  test('미지원 외부 인증수단 계정은 탈퇴를 차단하고 관리자 접근을 거부한다', async ({ page }) => {
+    await loginWithPassword(page, FUTURE_HYBRID_LOGIN_ID, FUTURE_HYBRID_PASSWORD)
+    await page.goto('/account')
+
+    const deleteSection = page.locator('section').filter({
+      has: page.getByRole('heading', { name: '회원 탈퇴' }),
+    })
+    await expect(deleteSection).toContainText('고객지원에 문의해 주세요.')
+    await expect(deleteSection.getByLabel('현재 비밀번호')).toHaveCount(0)
+    await expect(deleteSection.getByRole('button', { name: '회원 탈퇴', exact: true })).toHaveCount(0)
+    await expect(deleteSection.getByRole('button', { name: '카카오 재인증 후 탈퇴' })).toHaveCount(0)
+
+    const forbiddenResponsePromise = page.waitForResponse((response) => (
+      apiPath(response) === '/api/v1/admin/users' &&
+      response.request().method() === 'GET'
+    ))
+    await page.goto('/admin/users')
+    expect((await forbiddenResponsePromise).status()).toBe(403)
+    await expect(page.getByRole('heading', { name: '관리자 권한이 필요합니다' })).toBeVisible()
+    await page.getByRole('button', { name: '로그아웃', exact: true }).click()
   })
 
   test('로그인된 계정은 만료 콜백에서도 세션을 보존하고 카카오 연결·재인증 탈퇴를 완료한다', async ({ page }) => {

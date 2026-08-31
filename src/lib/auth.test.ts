@@ -16,8 +16,6 @@ const signupContext: KakaoSignupContextResponse = {
   phone_number: '01012345678',
   phone_number_verified_by_kakao: true,
   account_link_required: false,
-  terms_version: '2026-08-24',
-  privacy_version: '2026-08-24',
 }
 
 const authResponse: AuthResponse = {
@@ -72,9 +70,7 @@ describe('Kakao signup API', () => {
     await expect(exchangeKakaoAuth({
       ticket: 'one-time-ticket',
       terms_accepted: true,
-      terms_version: signupContext.terms_version,
       privacy_accepted: true,
-      privacy_version: signupContext.privacy_version,
       name: signupContext.name ?? undefined,
       phone_number: signupContext.phone_number ?? undefined,
     })).resolves.toEqual(authResponse)
@@ -83,9 +79,7 @@ describe('Kakao signup API', () => {
     expect(JSON.parse(String(init.body))).toEqual({
       ticket: 'one-time-ticket',
       terms_accepted: true,
-      terms_version: '2026-08-24',
       privacy_accepted: true,
-      privacy_version: '2026-08-24',
       name: '홍길동',
       phone_number: '01012345678',
     })
@@ -101,9 +95,7 @@ describe('Kakao signup API', () => {
     await exchangeKakaoAuth({
       ticket: 'one-time-ticket',
       terms_accepted: true,
-      terms_version: signupContext.terms_version,
       privacy_accepted: true,
-      privacy_version: signupContext.privacy_version,
       name: signupContext.name ?? undefined,
       phone_number: '01087654321',
       sms_verification_token: 'sms-verification-token',
