@@ -71,9 +71,14 @@ function isKakaoAuthorizationUrl(value: string) {
 export default function AccountPage() {
   const session = useAuthSession()
   const user = session?.user as AppUser | undefined
-  const externalAuthMethods = user?.auth_methods.filter(
+  const authMethods = Array.isArray(user?.auth_methods)
+    ? user.auth_methods
+    : user?.has_password
+      ? [AUTH_METHOD.PASSWORD]
+      : []
+  const externalAuthMethods = authMethods.filter(
     (method) => method !== AUTH_METHOD.PASSWORD,
-  ) ?? []
+  )
   const hasKakao = externalAuthMethods.includes(AUTH_METHOD.KAKAO)
   const canDeleteWithKakao = (
     externalAuthMethods.length === 1 && hasKakao
