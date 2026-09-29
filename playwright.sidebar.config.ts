@@ -11,7 +11,7 @@ const viteCli = resolve(frontendRoot, 'node_modules/vite/bin/vite.js')
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['sidebar-menu.e2e.ts', 'court-search.e2e.ts', 'schedule-calendar.e2e.ts'],
+  testMatch: ['sidebar-menu.e2e.ts', 'court-search.e2e.ts', 'schedule-calendar.e2e.ts', 'instant-search.e2e.ts', 'search-result-usage.e2e.ts'],
   workers: 1,
   retries: 0,
   reporter: [

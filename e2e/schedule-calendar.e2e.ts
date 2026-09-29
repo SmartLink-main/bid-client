@@ -139,7 +139,6 @@ test('관할법원과 법원·지원을 선택해 월별 공고를 필터링한�
     '서울북부지방법원',
   ])
   await branchSelect.selectOption({ label: '서울중앙지방법원' })
-  await page.getByRole('button', { name: '필터 적용', exact: true }).click()
 
   await expect(page).toHaveURL((url) => (
     url.pathname === '/schedules'
@@ -147,7 +146,8 @@ test('관할법원과 법원·지원을 선택해 월별 공고를 필터링한�
       && url.searchParams.get('court_name') === '서울'
       && url.searchParams.get('branch_name') === '서울중앙지방법원'
   ))
-  await expect.poll(() => requests.length).toBe(2)
+  await expect.poll(() => requests.at(-1) && new URL(requests.at(-1)!).searchParams.get('branch_name'))
+    .toBe('서울중앙지방법원')
 
   const filteredRequest = new URL(requests.at(-1)!)
   expect(filteredRequest.searchParams.get('start_date')).toBe('2026-08-01')
@@ -170,7 +170,6 @@ test('관할법원을 변경하면 이전 법원·지원 선택을 초기화한�
   await expect(branchSelect).toHaveValue('')
   await expect(branchSelect).toBeEnabled()
   await expect(branchSelect.locator('option')).toHaveText(['전체 법원·지원', '제주지방법원'])
-  await page.getByRole('button', { name: '필터 적용', exact: true }).click()
 
   await expect(page).toHaveURL((url) => (
     url.pathname === '/schedules'
@@ -178,7 +177,8 @@ test('관할법원을 변경하면 이전 법원·지원 선택을 초기화한�
       && url.searchParams.get('court_name') === '제주'
       && !url.searchParams.has('branch_name')
   ))
-  await expect.poll(() => requests.length).toBe(2)
+  await expect.poll(() => requests.at(-1) && new URL(requests.at(-1)!).searchParams.get('court_name'))
+    .toBe('제주')
 
   const filteredRequest = new URL(requests.at(-1)!)
   expect(filteredRequest.searchParams.get('court_name')).toBe('제주')

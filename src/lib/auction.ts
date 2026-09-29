@@ -1,4 +1,4 @@
-import { apiRequest, type ApiRequestInit } from './api'
+import { apiRequest, withQuery, type ApiRequestInit } from './api'
 
 export type ApiListResponse<T> = {
   total: number
@@ -39,6 +39,7 @@ export type AuctionGoodsSearchItem = {
   map_y?: number | null
   distance_m?: number | null
   case_id?: string | null
+  case_number?: string | null
   case_name?: string | null
   progress_status_name?: string | null
   result_division_name?: string | null
@@ -46,7 +47,7 @@ export type AuctionGoodsSearchItem = {
 }
 
 export type AuctionGoodsSearchResponse = ApiListResponse<AuctionGoodsSearchItem>
-export type AuctionSearchMode = 'standard' | 'comprehensive' | 'npl' | 'special'
+export type AuctionSearchMode = 'standard' | 'comprehensive' | 'special'
 
 export type CourtDivisionOption = {
   division_number: number
@@ -108,38 +109,17 @@ export type AuctionSearchParams = {
   offset?: number
 }
 
-function appendParam(query: URLSearchParams, key: string, value: unknown) {
-  if (value === undefined || value === null || value === '') {
-    return
-  }
-
-  if (Array.isArray(value)) {
-    value.forEach((item) => appendParam(query, key, item))
-    return
-  }
-
-  query.append(key, String(value))
-}
-
-export function buildSearchQuery(params: AuctionSearchParams) {
-  const query = new URLSearchParams()
-  Object.entries(params).forEach(([key, value]) => appendParam(query, key, value))
-  return query
-}
-
 export function searchGoods(
   params: AuctionSearchParams,
   mode: AuctionSearchMode = 'standard',
   init?: Pick<ApiRequestInit, 'signal'>,
 ) {
-  const query = buildSearchQuery(params)
-  const suffix = query.toString()
   const path = mode === 'standard'
     ? '/api/v1/search'
     : `/api/v1/search/${mode}`
 
   return apiRequest<AuctionGoodsSearchResponse>(
-    `${path}${suffix ? `?${suffix}` : ''}`,
+    withQuery(path, params),
     init,
   )
 }

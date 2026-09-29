@@ -44,10 +44,7 @@ afterEach(() => {
 
 describe('Kakao signup API', () => {
   it('reads provider signup context through the browser-bound ticket request', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(signupContext), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    }))
+    const fetchMock = vi.fn().mockResolvedValue(Response.json(signupContext))
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(getKakaoSignupContext('one-time-ticket')).resolves.toEqual(signupContext)
@@ -61,10 +58,7 @@ describe('Kakao signup API', () => {
   })
 
   it('exchanges an unchanged Kakao-verified phone without an SMS token', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(authResponse), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    }))
+    const fetchMock = vi.fn().mockResolvedValue(Response.json(authResponse))
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(exchangeKakaoAuth({
@@ -86,10 +80,7 @@ describe('Kakao signup API', () => {
   })
 
   it('forwards the SMS verification token for a phone missing from Kakao context', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(authResponse), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    }))
+    const fetchMock = vi.fn().mockResolvedValue(Response.json(authResponse))
     vi.stubGlobal('fetch', fetchMock)
 
     await exchangeKakaoAuth({
@@ -109,10 +100,7 @@ describe('Kakao signup API', () => {
   })
 
   it('links the Kakao ticket only after sending explicit existing credentials', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(authResponse), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    }))
+    const fetchMock = vi.fn().mockResolvedValue(Response.json(authResponse))
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(linkKakaoAccount({
@@ -134,10 +122,7 @@ describe('Kakao signup API', () => {
   })
 
   it('requires the existing login ID when linking with ticket-bound SMS proof', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(authResponse), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    }))
+    const fetchMock = vi.fn().mockResolvedValue(Response.json(authResponse))
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(linkKakaoAccount({
@@ -169,14 +154,8 @@ describe('Kakao signup API', () => {
       verified: true,
     }
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(challengeResponse), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(verificationResponse), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }))
+      .mockResolvedValueOnce(Response.json(challengeResponse))
+      .mockResolvedValueOnce(Response.json(verificationResponse))
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(requestKakaoAccountLinkSmsCode({
@@ -199,11 +178,8 @@ describe('Kakao signup API', () => {
   it('starts an authenticated account-settings link after current-password reauthentication', async () => {
     storeAuthSession(authResponse)
     const authorizationUrl = 'https://kauth.kakao.com/oauth/authorize?client_id=test'
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
       authorization_url: authorizationUrl,
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
     }))
     vi.stubGlobal('fetch', fetchMock)
 

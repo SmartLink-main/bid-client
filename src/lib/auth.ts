@@ -64,10 +64,6 @@ export type AuthResponse = {
   user: AppUser
 }
 
-export type MeResponse = {
-  user: AppUser
-}
-
 export type KakaoAuthExchangeRequest = {
   ticket: string
   terms_accepted: boolean
@@ -209,12 +205,6 @@ export function startKakaoAccountDeletion() {
     auth: 'bearer',
     authErrorMode: 'access-token',
     body: JSON.stringify({}),
-  })
-}
-
-export function getMe() {
-  return apiRequest<MeResponse>('/api/v1/me', {
-    auth: 'bearer',
   })
 }
 

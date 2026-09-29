@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   AlertCircle,
@@ -12,8 +12,15 @@ import {
 } from 'lucide-react'
 import Layout from '../components/Layout'
 import FavoriteToggleButton from '../components/FavoriteToggleButton'
+import GoodsCommentsSection from '../components/GoodsCommentsSection'
+import GoodsDocumentsSection from '../components/GoodsDocumentsSection'
+import GoodsSaleAreasSection from '../components/GoodsSaleAreasSection'
+import GoodsLocationSection from '../components/GoodsLocationSection'
+import GoodsAppraisalContent from '../components/GoodsAppraisalContent'
+import { goodsScheduleLabels } from '../lib/goods-detail-display'
+import { orderGoodsPhotos } from '../lib/goods-photo-display'
 import { getKoreanErrorMessage } from '../lib/api'
-import { formatMoney, formatNumber } from '../lib/format'
+import { formatMoney } from '../lib/format'
 import {
   getGoodsDetail,
   getGoodsPhotoUrl,
@@ -110,17 +117,26 @@ function PhotoImage({
   onRetry: () => void
 }) {
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading')
+  const imageRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
-    if (status !== 'loading') {
+    if (status !== 'loading' || !imageRef.current) {
       return
     }
 
-    const timeoutId = window.setTimeout(
-      () => setStatus('error'),
-      PHOTO_REQUEST_TIMEOUT_MILLISECONDS,
-    )
-    return () => window.clearTimeout(timeoutId)
+    // 화면 아래의 lazy 이미지가 요청되기도 전에 시간 초과로 바뀌지 않도록 한다.
+    let timeoutId: number | undefined
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        timeoutId = window.setTimeout(() => setStatus('error'), PHOTO_REQUEST_TIMEOUT_MILLISECONDS)
+        observer.disconnect()
+      }
+    }, { rootMargin: '300px' })
+    observer.observe(imageRef.current)
+    return () => {
+      observer.disconnect()
+      window.clearTimeout(timeoutId)
+    }
   }, [status])
 
   if (status === 'error') {
@@ -147,6 +163,7 @@ function PhotoImage({
         </div>
       )}
       <img
+        ref={imageRef}
         src={source}
         alt={title}
         loading="lazy"
@@ -162,16 +179,14 @@ function PhotoImage({
 function PhotoCard({ photo, index }: { photo: GoodsPhoto; index: number }) {
   const [attempt, setAttempt] = useState(0)
   const title = photo.photo_title || `사진 ${index + 1}`
-  const baseSource = getGoodsPhotoUrl(photo.content_url)
+  const baseSource = getGoodsPhotoUrl(photo.content_url, photo.cdn_path)
   const source = baseSource
-    ? `${baseSource}${baseSource.includes('?') ? '&' : '?'}retry=${attempt}`
-    : null
 
   return (
-    <article className="overflow-hidden rounded-lg border border-gray-200 bg-slate-50">
+    <article className="w-[85%] shrink-0 snap-start overflow-hidden rounded-lg border border-gray-200 bg-slate-50 sm:w-80 lg:w-96">
       {source ? (
         <PhotoImage
-          key={source}
+          key={`${source}:${attempt}`}
           source={source}
           title={title}
           onRetry={() => setAttempt((value) => value + 1)}
@@ -181,32 +196,36 @@ function PhotoCard({ photo, index }: { photo: GoodsPhoto; index: number }) {
           표시할 수 있는 사진 URL이 없습니다.
         </div>
       )}
-      <div className="space-y-1 p-4">
-        <h3 className="font-extrabold text-slate-900">{title}</h3>
-        <p className="text-xs text-gray-400">
-          {[photo.content_type, photo.file_size_bytes ? formatNumber(photo.file_size_bytes, ' bytes') : null]
-            .filter(Boolean)
-            .join(' · ') || '파일 정보 없음'}
-        </p>
-      </div>
     </article>
   )
 }
 
 function PhotoGrid({ photos }: { photos: GoodsPhoto[] }) {
+  const [visibleCount, setVisibleCount] = useState(3)
   if (photos.length === 0) {
-    return <EmptyMessage>등록된 사진 메타데이터가 없습니다.</EmptyMessage>
+    return <EmptyMessage>아직 수집된 물건 사진이 없습니다.</EmptyMessage>
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {photos.map((photo, index) => (
+    <div
+      role="region"
+      aria-label="물건 사진 목록"
+      tabIndex={0}
+      className="flex w-full min-w-0 snap-x snap-proximity gap-4 overflow-x-auto overscroll-x-contain pb-3 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-700"
+    >
+      {photos.slice(0, visibleCount).map((photo, index) => (
         <PhotoCard
           key={photo.photo_id ?? `${photo.photo_sequence ?? 'photo'}-${index}`}
           photo={photo}
           index={index}
         />
       ))}
+      {visibleCount < photos.length && (
+        <button type="button" onClick={() => setVisibleCount(count => count + 3)}
+          className="min-w-36 shrink-0 rounded-lg border border-gray-200 bg-white px-4 py-6 text-sm font-bold text-indigo-700">
+          사진 더 보기 ({photos.length - visibleCount}장)
+        </button>
+      )}
     </div>
   )
 }
@@ -289,6 +308,7 @@ export default function GoodsDetailPage() {
     : ''
 
   const summary = detail?.summary
+  const scheduleLabels = summary ? goodsScheduleLabels(summary) : null
   const caseSection = detail?.case
   const progress = detail?.progress
   const hearings = detail?.sale_hearings
@@ -370,7 +390,7 @@ export default function GoodsDetailPage() {
                         </div>
                       </div>
                       <div className="rounded-lg bg-blue-50 p-4">
-                        <div className="text-xs font-bold text-blue-500">최저매각가격</div>
+                        <div className="text-xs font-bold text-blue-500">{scheduleLabels?.price}</div>
                         <div className="mt-1 text-lg font-extrabold text-blue-900">
                           {displayAmount(summary.lowest_sale_price_text, summary.lowest_sale_price)}
                         </div>
@@ -390,20 +410,33 @@ export default function GoodsDetailPage() {
                 </div>
                 <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                   <CalendarDays className="h-5 w-5 text-indigo-600" />
-                  <div className="mt-3 text-sm font-bold text-gray-400">대표 매각기일</div>
+                  <div className="mt-3 text-sm font-bold text-gray-400">{scheduleLabels?.date}</div>
                   <div className="mt-1 text-lg font-extrabold text-slate-900">
-                    {displayValue(summary.sale_date_text || summary.sale_date)}
+                    {displayValue(summary.sale_date_text || summary.sale_date, '미확인')}
                   </div>
                 </div>
                 <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                   <Home className="h-5 w-5 text-indigo-600" />
-                  <div className="mt-3 text-sm font-bold text-gray-400">입찰보증금</div>
+                  <div className="mt-3 text-sm font-bold text-gray-400">{scheduleLabels?.deposit}</div>
                   <div className="mt-1 text-lg font-extrabold text-slate-900">
                     {displayAmount(summary.bid_deposit_amount_text, summary.bid_deposit_amount)}
                   </div>
                   <p className="mt-1 text-xs font-bold text-gray-400">보증금률 {displayValue(summary.bid_deposit_rate_text)}</p>
                 </div>
               </section>
+
+              {scheduleLabels?.notice && (
+                <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">{scheduleLabels.notice}</p>
+              )}
+
+              <GoodsLocationSection location={detail.location} address={summary.address} />
+
+              {auctionGoodsId && (
+                <GoodsCommentsSection
+                  key={auctionGoodsId}
+                  auctionGoodsId={auctionGoodsId}
+                />
+              )}
 
               <SectionCard title="사건 기본정보" description="사건, 법원, 이해관계인과 관련 사건 정보입니다.">
                 {caseSection ? (
@@ -437,7 +470,7 @@ export default function GoodsDetailPage() {
                           ))}
                         </div>
                       ) : (
-                        <div className="mt-3"><EmptyMessage>등록된 이해관계인이 없습니다.</EmptyMessage></div>
+                        <div className="mt-3"><EmptyMessage>이해관계인 정보를 아직 확인할 수 없습니다.</EmptyMessage></div>
                       )}
                     </div>
 
@@ -455,7 +488,7 @@ export default function GoodsDetailPage() {
                           ))}
                         </ul>
                       ) : (
-                        <div className="mt-3"><EmptyMessage>등록된 관련 사건이 없습니다.</EmptyMessage></div>
+                        <div className="mt-3"><EmptyMessage>관련 사건 정보를 아직 확인할 수 없습니다.</EmptyMessage></div>
                       )}
                     </div>
                   </div>
@@ -558,33 +591,27 @@ export default function GoodsDetailPage() {
                 ) : <EmptyMessage>등록된 매각기일 이력이 없습니다.</EmptyMessage>}
               </SectionCard>
 
-              <SectionCard title="감정평가" description="감정가와 감정평가요항표의 세부 내용을 표시합니다.">
+              <GoodsSaleAreasSection areas={detail.sale_areas} />
+
+              <SectionCard title="감정평가" description="감정평가요항표의 설명을 모았습니다. 매각 주의사항은 아래 권리·특수조건 주의사항에서 확인할 수 있습니다.">
                 {appraisal ? (
                   <div className="space-y-5">
-                    <InfoGrid
-                      items={[
-                        { label: '감정가', value: displayAmount(appraisal.appraisal_amount_text, appraisal.appraisal_amount) },
-                        { label: '최초공고 최저가', value: displayAmount(appraisal.first_announcement_lowest_sale_price_text, appraisal.first_announcement_lowest_sale_price) },
-                        { label: '특이사항', value: appraisal.goods_specific_remark },
-                        { label: '감정 항목 수', value: appraisal.items.length },
-                      ]}
-                    />
-                    {appraisal.items.length > 0 ? (
-                      <div className="space-y-3">
-                        {appraisal.items.map((item, index) => (
-                          <article key={`${item.display_order ?? index}-${item.item_name ?? ''}`} className="rounded-lg border border-gray-200 p-4">
-                            <p className="text-xs font-bold text-indigo-600">{displayValue(item.table_division_name, '감정평가 항목')}</p>
-                            <h3 className="mt-1 font-extrabold text-slate-900">{displayValue(item.item_name)}</h3>
-                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-600">{displayValue(item.content)}</p>
-                          </article>
-                        ))}
+                    <dl className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
+                      <div className="flex flex-wrap items-baseline gap-x-3">
+                        <dt className="text-gray-500">감정가</dt>
+                        <dd className="font-extrabold text-slate-900">{displayAmount(appraisal.appraisal_amount_text, appraisal.appraisal_amount)}</dd>
                       </div>
-                    ) : <EmptyMessage>등록된 감정평가 항목이 없습니다.</EmptyMessage>}
+                      <div className="flex flex-wrap items-baseline gap-x-3">
+                        <dt className="text-gray-500">최초공고 최저가</dt>
+                        <dd className="font-bold text-slate-700">{displayAmount(appraisal.first_announcement_lowest_sale_price_text, appraisal.first_announcement_lowest_sale_price)}</dd>
+                      </div>
+                    </dl>
+                    <GoodsAppraisalContent key={auctionGoodsId} items={appraisal.items ?? []} />
                   </div>
                 ) : <EmptyMessage>감정평가 정보가 없습니다.</EmptyMessage>}
               </SectionCard>
 
-              <SectionCard title="건물·토지 정보" description="주소, 면적, 용도, 구조와 층별 현황입니다.">
+              <SectionCard title="건축물대장 정보" description="건축물대장의 대지면적·건축면적·연면적과 층별 현황입니다. 매각 대상 면적은 위 매각목록 면적에서 확인할 수 있습니다.">
                 {building ? (
                   <div className="space-y-6">
                     <InfoGrid
@@ -593,8 +620,8 @@ export default function GoodsDetailPage() {
                         { label: '주용도', value: building.main_building_usage },
                         { label: '구조', value: building.building_structure_name },
                         { label: '상세', value: building.building_detail },
-                        { label: '토지면적', value: building.land_area_pyeong_text || building.land_area_sqm_text },
-                        { label: '건물면적', value: building.building_area_pyeong_text || building.building_area_sqm_text },
+                        { label: '대지면적', value: building.land_area_pyeong_text || building.land_area_sqm_text },
+                        { label: '건축면적', value: building.building_area_pyeong_text || building.building_area_sqm_text },
                         { label: '연면적', value: building.gross_floor_area_pyeong_text || building.gross_floor_area_sqm_text },
                         { label: '용적률 산정면적', value: building.floor_area_ratio_area_pyeong_text || building.floor_area_ratio_area_sqm_text },
                         { label: '건폐율', value: building.building_coverage_ratio_text },
@@ -630,18 +657,19 @@ export default function GoodsDetailPage() {
                       items={[
                         { label: '말소기준권리', value: tenants.senior_right_base_text },
                         { label: '배당요구종기일', value: tenants.demand_deadline_date_text || tenants.demand_deadline_date },
-                        { label: '임차인 수', value: tenants.items.length },
+                        { label: '수집된 점유·임대차 항목', value: tenants.items.length ? `${tenants.items.length}건` : '미확인' },
                       ]}
                     />
                     {tenants.items.length > 0 ? (
                       <div className="grid gap-4 md:grid-cols-2">
                         {tenants.items.map((tenant, index) => (
                           <article key={`${tenant.display_order ?? index}-${tenant.tenant_name ?? ''}`} className="rounded-lg border border-gray-200 p-4">
-                            <h3 className="font-extrabold text-slate-900">{displayValue(tenant.tenant_name, `임차인 ${index + 1}`)}</h3>
+                            <h3 className="font-extrabold text-slate-900">{displayValue(tenant.tenant_name, `점유·임대차 정보 ${index + 1}`)}</h3>
                             <p className="mt-1 text-sm text-gray-600">{displayValue(tenant.occupancy_text, '점유 정보 없음')}</p>
                             <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
                               <div><span className="font-bold text-gray-400">전입일</span><p className="mt-1 font-bold text-slate-700">{displayValue(tenant.move_in_date_text || tenant.move_in_date)}</p></div>
                               <div><span className="font-bold text-gray-400">확정일자</span><p className="mt-1 font-bold text-slate-700">{displayValue(tenant.fixed_date_text || tenant.fixed_date)}</p></div>
+                              <div><span className="font-bold text-gray-400">배당요구일</span><p className="mt-1 font-bold text-slate-700">{displayValue(tenant.demand_date_text || tenant.demand_date, '미확인')}</p></div>
                               <div><span className="font-bold text-gray-400">보증금</span><p className="mt-1 font-bold text-slate-700">{displayAmount(tenant.deposit_amount_text, tenant.deposit_amount)}</p></div>
                               <div><span className="font-bold text-gray-400">월세</span><p className="mt-1 font-bold text-slate-700">{displayAmount(tenant.monthly_rent_amount_text, tenant.monthly_rent_amount)}</p></div>
                             </div>
@@ -653,7 +681,7 @@ export default function GoodsDetailPage() {
                           </article>
                         ))}
                       </div>
-                    ) : <EmptyMessage>등록된 임차인이 없습니다.</EmptyMessage>}
+                    ) : <EmptyMessage>임차인 정보를 아직 확인할 수 없습니다. 임차인이 없다는 뜻은 아닙니다.</EmptyMessage>}
                   </div>
                 ) : <EmptyMessage>임차인 정보가 없습니다.</EmptyMessage>}
               </SectionCard>
@@ -692,23 +720,25 @@ export default function GoodsDetailPage() {
                       </div>
                     ))}
                   </div>
-                ) : <EmptyMessage>등록된 등기부 권리 정보가 없습니다.</EmptyMessage>}
+                ) : <EmptyMessage>등기부 권리 정보를 아직 확인할 수 없습니다. 권리가 없다는 뜻은 아닙니다.</EmptyMessage>}
               </SectionCard>
 
-              <SectionCard title="권리·특수조건 주의사항" description="인수 가능 권리와 지상권, 선순위 권리, 특별매각조건 원문입니다.">
-                {risks ? (
+              <SectionCard title="권리·특수조건 주의사항" description="매각 범위와 인수 가능 권리, 선순위 권리 등 수집된 원문입니다. 미확인은 해당 권리가 없다는 뜻이 아닙니다.">
+                {risks || appraisal?.goods_specific_remark || caseSection?.goods_remark ? (
                   <div className="grid gap-3 md:grid-cols-2">
                     {[
-                      ['인수권리', risks.rights_takeover_text],
-                      ['지상권', risks.surface_existence_text],
-                      ['선순위권리', risks.senior_right_text],
-                      ['소멸되지 않는 등기부권리', risks.non_extinguished_registry_rights_text],
-                      ['소멸되지 않는 지상권', risks.non_extinguished_superficies_text],
-                      ['특별매각조건', risks.special_condition_text],
+                      ['매각 범위·비고', caseSection?.goods_remark],
+                      ['매각 주의사항', appraisal?.goods_specific_remark],
+                      ['인수권리', risks?.rights_takeover_text],
+                      ['지상권', risks?.surface_existence_text],
+                      ['선순위권리', risks?.senior_right_text],
+                      ['소멸되지 않는 등기부권리', risks?.non_extinguished_registry_rights_text],
+                      ['소멸되지 않는 지상권', risks?.non_extinguished_superficies_text],
+                      ['특별매각조건', risks?.special_condition_text],
                     ].map(([label, value]) => (
                       <article key={label} className="rounded-lg border border-amber-100 bg-amber-50 p-4">
                         <h3 className="text-xs font-extrabold text-amber-700">{label}</h3>
-                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{displayValue(value, '해당 사항 없음')}</p>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{displayValue(value, '미확인')}</p>
                       </article>
                     ))}
                   </div>
@@ -736,8 +766,12 @@ export default function GoodsDetailPage() {
                 ) : <EmptyMessage>조건에 맞는 인근 매각사례가 없습니다.</EmptyMessage>}
               </SectionCard>
 
-              <SectionCard title="물건 사진" description="사진은 객체 저장소 경로를 공개하지 않는 앱 전용 경로로 안전하게 표시합니다.">
-                <PhotoGrid photos={detail.photos.items} />
+              <SectionCard title="물건 사진" description="이 물건에 연결된 법원 수집 사진입니다.">
+                <PhotoGrid key={detail.auction_goods_id} photos={orderGoodsPhotos(detail.photos?.items ?? [], detail.auction_goods_id)} />
+              </SectionCard>
+
+              <SectionCard title="매각물건명세서" description="이 물건에 연결된 법원 문서 원본을 확인하거나 다운로드할 수 있습니다. 최근 수집 문서부터 표시합니다.">
+                <GoodsDocumentsSection goodsId={detail.auction_goods_id} documents={detail.documents?.items ?? []} />
               </SectionCard>
 
               <SectionCard title="현재 제공되지 않는 분석" description="정규 데이터가 없어 API가 명시적으로 unavailable로 반환한 항목입니다.">

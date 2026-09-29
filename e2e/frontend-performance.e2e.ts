@@ -51,7 +51,6 @@ const PUBLIC_ROUTES: RouteCase[] = [
   { name: '종합 상세검색', path: '/advanced-search', readyText: '경매 종합 상세검색' },
   { name: '지도 영역 검색', path: '/map-search', readyText: '지도 영역 경매물건 찾기' },
   { name: '역세권 검색', path: '/subway-search', readyText: '역세권 경매물건 찾기' },
-  { name: 'NPL 검색', path: '/npl-search', readyText: 'NPL 후보 분석' },
   { name: '미지정 예정물건', path: '/scheduled-search', readyText: '첫 매각기일 미지정 물건', discoverLinkPrefix: '/goods/' },
   { name: '경매 일정', path: '/schedules', readyText: '경매 공고 일정', discoverLinkPrefix: '/schedules/' },
   { name: '자연어 검색', path: '/question-search', readyText: '원하는 경매 물건을 문장으로 찾아보세요' },

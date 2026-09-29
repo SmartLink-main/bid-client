@@ -4,6 +4,7 @@ import {
   getKoreanErrorMessage,
   initializeAuthSession,
   isNetworkRequestError,
+  withQuery,
 } from './api'
 import {
   clearAuthSession,
@@ -29,6 +30,37 @@ const signedInResponse: AuthResponse = {
   },
 }
 
+describe('검색 쿼리 직렬화', () => {
+  it('빈 값은 생략하고 0·false·반복 조건과 한글을 보존한다', () => {
+    const params = {
+      q: '대구 & 부산',
+      empty: '',
+      missing: undefined,
+      absent: null,
+      goods_usage: ['아파트', '', null, ['토지', '아파트']],
+      min_price: 0,
+      half_price: false,
+      limit: 50,
+    }
+    const result = new URL(withQuery('/api/v1/search', params), 'http://localhost')
+
+    expect(result.pathname).toBe('/api/v1/search')
+    expect([...result.searchParams]).toEqual([
+      ['q', '대구 & 부산'],
+      ['goods_usage', '아파트'],
+      ['goods_usage', '토지'],
+      ['goods_usage', '아파트'],
+      ['min_price', '0'],
+      ['half_price', 'false'],
+      ['limit', '50'],
+    ])
+    expect(params.goods_usage).toEqual(['아파트', '', null, ['토지', '아파트']])
+    for (const emptyParams of [{}, { q: '', limit: undefined, ids: [] }]) {
+      expect(withQuery('/api/v1/search', emptyParams)).toBe('/api/v1/search')
+    }
+  })
+})
+
 describe('API error messages', () => {
   it('describes a rejected fetch as a service connection failure, not an internet problem', () => {
     const error = new TypeError('Failed to fetch')
@@ -37,7 +69,6 @@ describe('API error messages', () => {
     expect(getKoreanErrorMessage(error)).toBe(
       '서비스에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.',
     )
-    expect(getKoreanErrorMessage(error)).not.toContain('네트워크 연결')
   })
 })
 
@@ -92,10 +123,7 @@ describe('authentication bootstrap', () => {
         })
       }
       if (pathname.endsWith('/api/v1/login')) {
-        return Promise.resolve(new Response(JSON.stringify(signedInResponse), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }))
+        return Promise.resolve(Response.json(signedInResponse))
       }
       throw new Error(`Unexpected request: ${pathname}`)
     })
@@ -122,9 +150,8 @@ describe('authentication bootstrap', () => {
 
     const initialization = initializeAuthSession()
     storeAuthSession(signedInResponse)
-    resolveRefresh(new Response(JSON.stringify({ detail: 'expired' }), {
+    resolveRefresh(Response.json({ detail: 'expired' }, {
       status: 401,
-      headers: { 'Content-Type': 'application/json' },
     }))
 
     await expect(initialization).rejects.toMatchObject({ status: 401 })

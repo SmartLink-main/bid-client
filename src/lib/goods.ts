@@ -1,8 +1,11 @@
+import type { GoodsDocument } from './goods-documents'
 import { apiRequest, getApiUrl } from './api'
 
 export type Nullable<T> = T | null
 
 export type GoodsSummary = {
+  sale_schedule_status?: 'upcoming' | 'past' | 'unconfirmed'
+  sale_date_source?: 'hearing' | 'schedule' | null
   title: string
   court_name: Nullable<string>
   branch_name: Nullable<string>
@@ -274,9 +277,54 @@ export type GoodsPhoto = {
   content_hash: Nullable<string>
   file_size_bytes: Nullable<number>
   collected_at: Nullable<string>
+  cdn_path?: string | null
+}
+
+export type GoodsSaleAreaValue = {
+  sqm: Nullable<number>
+  pyeong: Nullable<number>
+  sqm_text: Nullable<string>
+  pyeong_text: Nullable<string>
+  status: 'calculated' | 'partial' | 'unknown' | 'not_applicable'
+  known_sqm: Nullable<number>
+  known_pyeong: Nullable<number>
+  verification_status: 'verified' | 'needs_review'
+  issues: string[]
+}
+
+export type GoodsSaleAreasSection = {
+  available: boolean
+  basis: Nullable<'court_listed'>
+  calculation_version: Nullable<string>
+  collected_at: Nullable<string>
+  land: GoodsSaleAreaValue
+  land_parcel: GoodsSaleAreaValue
+  land_rights: GoodsSaleAreaValue
+  main_building: GoodsSaleAreaValue
+  shared_building: GoodsSaleAreaValue
+  extra_building: GoodsSaleAreaValue
+  extra_facility: GoodsSaleAreaValue
+  listed_total: GoodsSaleAreaValue
+  components: GoodsSaleAreaComponent[]
+}
+
+/** 저장된 목록별 면적과 매각 지분. 원문 파일을 추가로 요청하지 않는다. */
+export type GoodsSaleAreaComponent = {
+  item_label?: Nullable<string>
+  component_key: string
+  object_sequence: Nullable<number>
+  detail_sequence: Nullable<string>
+  area_kind: string
+  area_sqm: Nullable<number>
+  share_numerator: Nullable<number>
+  share_denominator: Nullable<number>
+  sale_area_sqm: Nullable<number>
+  inclusion: 'included' | 'excluded' | 'unknown'
+  qualifiers: string[]
 }
 
 export type GoodsDetailResponse = {
+  location?: { latitude: number; longitude: number } | null
   auction_goods_id: number
   case_id: string
   case_display_number: string
@@ -287,11 +335,13 @@ export type GoodsDetailResponse = {
   sale_hearings: SaleHearingsSection
   appraisal: GoodsAppraisalSection
   building: GoodsBuildingSection
+  sale_areas?: GoodsSaleAreasSection
   tenants: GoodsTenantsSection
   registry_rights: GoodsRegistryRightsSection
   risk_notices: GoodsRiskNoticesSection
   nearby_sales: GoodsNearbySalesSection
   unsupported_sections: UnsupportedGoodsSection[]
+  documents?: { available: boolean; items: GoodsDocument[] }
   photos: {
     available: boolean
     items: GoodsPhoto[]
@@ -352,15 +402,23 @@ function normalizedGoodsId(auctionGoodsId: number | string) {
   return encodeURIComponent(String(auctionGoodsId))
 }
 
-export function getGoodsPhotoUrl(contentUrl: string | null | undefined) {
-  if (
-    !contentUrl ||
-    !/^\/api\/v1\/goods\/\d+\/photos\/\d+$/.test(contentUrl)
-  ) {
-    return null
+export function getGoodsPhotoUrl(contentUrl: string | null | undefined, cdnPath?: string | null) {
+  // API가 검증한 이미지 해시 경로만 설정된 CDN origin으로 전달한다.
+  const configured = import.meta.env.VITE_PHOTO_CDN_BASE_URL?.trim()
+  if (configured && cdnPath && !/\s/.test(cdnPath) && /^\/g\/[a-f0-9]{24}\.(?:jpg|jpeg|png|webp|gif|avif|bmp)$/.test(cdnPath)) {
+    try {
+      const origin = new URL(configured)
+      const localTest = import.meta.env.DEV && origin.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(origin.hostname)
+      if ((origin.protocol === 'https:' || localTest) && !origin.username && !origin.password &&
+        origin.pathname === '/' && !origin.search && !origin.hash) {
+        return `${origin.origin}${cdnPath}`
+      }
+    } catch { /* CDN 설정이 없거나 잘못되면 기존 사진 proxy를 유지한다. */ }
   }
+  if (!contentUrl || !/^\/api\/v1\/goods\/\d+\/photos\/\d+$/.test(contentUrl)) return null
   return getApiUrl(contentUrl)
 }
+
 
 export function getGoodsDetail(
   auctionGoodsId: number | string,

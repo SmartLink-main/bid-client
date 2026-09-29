@@ -1,17 +1,24 @@
-import { type ChangeEvent, type FormEvent, useEffect, useMemo, useState } from 'react'
+import {
+  type ChangeEvent,
+  type FormEvent,
+  memo,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import FavoriteToggleButton from '../components/FavoriteToggleButton'
 import Layout from '../components/Layout'
-import { useAuthSession } from '../hooks/useAuthSession'
+import SearchCaseNumber from '../components/SearchCaseNumber'
+import SearchResultPhoto from '../components/SearchResultPhoto'
+import SearchUsageFilter from '../components/SearchUsageFilter'
 import {
   searchGoods,
   type AuctionGoodsSearchItem,
   type AuctionSearchMode,
   type AuctionSearchParams,
 } from '../lib/auction'
-import { formatMoney, formatNumber, getText } from '../lib/format'
+import { formatAreaPyeong, formatAuctionCountdown, formatMoney, formatMonthDay, formatNumber, getKoreanDateKey, getText } from '../lib/format'
 import { getApiUrl, getKoreanErrorMessage } from '../lib/api'
-import { getFavoriteStatuses } from '../lib/favorites'
 import {
   DEFAULT_SEARCH_RESULT_LIMIT,
   getLastSearchResultOffset,
@@ -22,6 +29,8 @@ import {
   searchResultSortOptions,
 } from '../lib/search-results'
 import { COURT_OPTIONS } from '../lib/search-filter-options'
+import { getSearchUsageKey, type SearchUsageSeed } from '../lib/search-usage-counts'
+import { useSearchResultPreview, type SearchResultPreviewCache } from '../lib/search-result-preview'
 import { ArrowUpDown, CalendarDays, ChevronLeft, ChevronRight, Loader2, MapPin, Search } from 'lucide-react'
 
 function parseNumber(value: string | null) {
@@ -42,7 +51,7 @@ function parseBoolean(value: string | null) {
 }
 
 function parseSearchMode(value: string | null): AuctionSearchMode {
-  return value === 'comprehensive' || value === 'npl' || value === 'special'
+  return value === 'comprehensive' || value === 'special'
     ? value
     : 'standard'
 }
@@ -127,10 +136,6 @@ function useFilterLabels(searchParams: URLSearchParams) {
     searchParams.getAll('goods_usage').forEach((item) => labels.push(`종류: ${item}`))
     searchParams.getAll('special_type').forEach((item) => labels.push(`특수유형: ${item}`))
 
-    if (searchParams.get('search_type') === 'npl') {
-      labels.unshift('NPL 후보 물건')
-    }
-
     if (searchParams.get('search_type') === 'comprehensive') {
       labels.unshift('상세검색')
     }
@@ -147,58 +152,60 @@ function useFilterLabels(searchParams: URLSearchParams) {
   }, [searchParams])
 }
 
-function ResultCard({
+const ResultCard = memo(function ResultCard({
   goods,
-  isFavorite,
-  isFavoriteStatusLoading,
-  onFavoriteChange,
+  previewCache,
+  today,
 }: {
   goods: AuctionGoodsSearchItem
-  isFavorite: boolean
-  isFavoriteStatusLoading: boolean
-  onFavoriteChange: (auctionGoodsId: number, isFavorite: boolean) => void
+  previewCache: SearchResultPreviewCache
+  today: string
 }) {
   const address = goods.printed_address || goods.road_address || goods.lot_number_address
+  const { cardRef, caseNumber, photoUrl, status, retry } = useSearchResultPreview(goods, previewCache)
 
   return (
-    <article className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
+    <article ref={cardRef} className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-2.5 rounded-lg border border-gray-200 bg-white p-3 shadow-sm sm:grid-cols-[8rem_minmax(0,1fr)] sm:gap-4 sm:p-4">
+      <SearchResultPhoto key={photoUrl || 'pending'} source={photoUrl} status={status} onRetry={retry} />
+      <div className="contents lg:grid lg:min-w-0 lg:grid-cols-[5rem_minmax(0,1fr)_auto] lg:items-center lg:gap-3">
+        <div role="group" aria-label="물건 용도" className="flex h-full min-h-[5.5rem] min-w-0 flex-col items-center justify-center gap-1 px-1 py-1 text-center lg:min-h-0">
+          <span className="text-xs font-semibold text-indigo-500">용도</span>
+          <p className="max-w-full break-words text-lg font-extrabold leading-snug text-indigo-800 [overflow-wrap:anywhere]">
+            {getText(goods.goods_usage_name, '용도 미등록')}
+          </p>
+        </div>
+        <div className="col-span-2 grid min-w-0 grid-cols-[minmax(0,1fr)_5.5rem] items-center gap-2.5 lg:col-span-1 lg:gap-x-8">
+          <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 text-[13px] font-bold text-indigo-700">
-            <span>{getText(goods.court_name)}</span>
-            <span className="text-gray-300">/</span>
             <span>{getText(goods.branch_name)}</span>
             {goods.division_name && <span className="rounded-md bg-indigo-50 px-2 py-1">{goods.division_name}</span>}
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-extrabold text-slate-700">
-              물건 {getText(goods.disposal_goods_sequence)}
-            </span>
-            <span className="text-sm font-bold text-indigo-700">{getText(goods.goods_usage_name)}</span>
-            <span className="text-sm text-gray-500">{getText(goods.goods_status_name, '')}</span>
-          </div>
-          <h2 className="mt-2 truncate text-xl font-extrabold text-slate-900">
-            {getText(goods.building_name || address, '주소 정보 없음')}
-          </h2>
+          <SearchCaseNumber caseNumber={caseNumber} status={status} onRetry={retry}>
+            <div role="group" aria-label="토지 및 건물 면적" className="flex shrink-0 flex-col gap-0.5 text-xs leading-4">
+              <p className="flex gap-1.5"><span className="text-gray-500">토지</span><span className="font-semibold tabular-nums text-slate-700">{formatAreaPyeong(goods.land_area_pyeong)}</span></p>
+              <p className="flex gap-1.5"><span className="text-gray-500">건물</span><span className="font-semibold tabular-nums text-slate-700">{formatAreaPyeong(goods.building_area_pyeong)}</span></p>
+            </div>
+          </SearchCaseNumber>
           {address && (
-            <p className="mt-1 flex items-center gap-1 truncate text-sm text-gray-500">
-              <MapPin className="h-4 w-4 shrink-0" />
-              {address}
+            <p className="mt-1 flex items-start gap-1 text-sm text-gray-500">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="min-w-0 break-words">{address}</span>
             </p>
           )}
-          <div className="mt-3 flex flex-wrap gap-3 text-sm text-gray-600">
-            <span className="flex items-center gap-1">
+          {typeof goods.distance_m === 'number' && (
+            <p className="mt-1 text-xs text-gray-500">기준점에서 {formatNumber(goods.distance_m, 'm')}</p>
+          )}
+          </div>
+          <div role="group" aria-label="매각일자" className="flex min-w-0 flex-col items-center justify-center gap-1 text-center">
+            <span className="flex items-center gap-1 text-sm font-bold text-slate-800">
               <CalendarDays className="h-4 w-4 text-gray-400" />
-              {getText(goods.auction_date)} {getText(goods.auction_time, '')}
+              {formatMonthDay(goods.auction_date)}
             </span>
-            <span>{getText(goods.auction_place, '매각장소 미정')}</span>
-            {typeof goods.distance_m === 'number' && (
-              <span>기준점에서 {formatNumber(goods.distance_m, 'm')}</span>
-            )}
+            <p className="text-xs font-bold leading-snug text-indigo-600">{formatAuctionCountdown(goods.auction_date, today)}</p>
           </div>
         </div>
-        <div className="flex shrink-0 flex-col gap-3 md:items-end">
-          <div className="grid grid-cols-2 gap-3 text-right sm:grid-cols-3">
+        <div className="col-span-2 flex min-w-0 flex-col gap-2 lg:col-span-1 lg:items-end">
+          <div className="flex flex-wrap gap-3 text-right">
             <div>
               <div className="text-xs text-gray-400">감정가</div>
               <div className="text-sm font-extrabold text-slate-900">{formatMoney(goods.appraisal_amount)}</div>
@@ -214,14 +221,7 @@ function ResultCard({
               <div className="text-sm font-extrabold text-slate-900">{formatNumber(goods.failed_count, '회')}</div>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 md:justify-end">
-            <FavoriteToggleButton
-              auctionGoodsId={goods.auction_goods_id}
-              initialIsFavorite={isFavorite}
-              shouldFetchStatus={false}
-              isStatusLoading={isFavoriteStatusLoading}
-              onChange={(nextIsFavorite) => onFavoriteChange(goods.auction_goods_id, nextIsFavorite)}
-            />
+          <div className="flex flex-wrap gap-2 lg:justify-end">
             <Link
               to={`/schedules/${goods.schedule_id}`}
               className="rounded-lg border border-indigo-200 px-3 py-2 text-sm font-bold text-indigo-700 transition-colors hover:bg-indigo-50"
@@ -250,19 +250,23 @@ function ResultCard({
       </div>
     </article>
   )
-}
+})
 
 export default function SearchResultsPage() {
-  const authSession = useAuthSession()
-  const sessionUser = authSession?.user as { id?: unknown; login_id?: unknown } | undefined
-  const authenticatedUserKey = authSession
-    ? typeof sessionUser?.id === 'string'
-      ? sessionUser.id
-      : typeof sessionUser?.login_id === 'string'
-        ? sessionUser.login_id
-        : 'authenticated-user'
-    : null
-  const isSignedIn = authenticatedUserKey !== null
+  const [today, setToday] = useState(getKoreanDateKey)
+  const previewCache = useMemo<SearchResultPreviewCache>(() => ({ goods: new Map(), caseNumbers: new Map() }), [])
+
+  useEffect(() => {
+    const refreshToday = () => setToday(getKoreanDateKey())
+    const timer = window.setInterval(refreshToday, 60_000)
+    window.addEventListener('focus', refreshToday)
+    document.addEventListener('visibilitychange', refreshToday)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refreshToday)
+      document.removeEventListener('visibilitychange', refreshToday)
+    }
+  }, [])
   const [searchParams, setSearchParams] = useSearchParams()
   const searchKey = searchParams.toString()
   const normalizedSearchKey = useMemo(
@@ -278,22 +282,20 @@ export default function SearchResultsPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [retryKey, setRetryKey] = useState(0)
-  const [favoriteStatuses, setFavoriteStatuses] = useState<Record<number, boolean>>({})
-  const [isFavoriteStatusesLoading, setIsFavoriteStatusesLoading] = useState(false)
-  const [favoriteStatusMessage, setFavoriteStatusMessage] = useState('')
   const [query, setQuery] = useState(currentSearchParams.get('q') || '')
+  const [usageSeed, setUsageSeed] = useState<SearchUsageSeed | null>(null)
   const filterLabels = useFilterLabels(currentSearchParams)
+  const usageContextKey = getSearchUsageKey(normalizedSearchKey)
+  const usageParams = useMemo(() => paramsFromSearch(new URLSearchParams(usageContextKey)), [usageContextKey])
   const sortBy = normalizeSearchResultSortBy(currentSearchParams.get('sort_by'))
   const limit = normalizeSearchResultLimit(currentSearchParams.get('limit'))
   const offset = normalizeSearchResultOffset(currentSearchParams.get('offset'), limit)
   const searchMode = parseSearchMode(currentSearchParams.get('search_type'))
-  const pageTitle = searchMode === 'npl'
-    ? 'NPL 후보 물건 검색결과'
-    : searchMode === 'special'
-      ? '특수물건 검색결과'
-      : searchMode === 'comprehensive'
-        ? '상세검색 결과'
-        : '검색 결과'
+  const pageTitle = searchMode === 'special'
+    ? '특수물건 검색결과'
+    : searchMode === 'comprehensive'
+      ? '상세검색 결과'
+      : '검색 결과'
 
   useEffect(() => {
     if (normalizedSearchKey !== searchKey) {
@@ -339,6 +341,7 @@ export default function SearchResultsPage() {
 
         setItems(response.items)
         setTotal(response.total)
+        setUsageSeed((current) => current?.key === usageContextKey ? current : { key: usageContextKey, params, response })
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
@@ -357,51 +360,7 @@ export default function SearchResultsPage() {
       isActive = false
       controller.abort()
     }
-  }, [currentSearchParams, retryKey, searchMode, setSearchParams])
-
-  useEffect(() => {
-    const controller = new AbortController()
-    if (!authenticatedUserKey || items.length === 0) {
-      queueMicrotask(() => {
-        if (!controller.signal.aborted) {
-          setFavoriteStatuses({})
-          setIsFavoriteStatusesLoading(false)
-          setFavoriteStatusMessage('')
-        }
-      })
-      return () => controller.abort()
-    }
-
-    const goodsIds = items.map((item) => item.auction_goods_id)
-    queueMicrotask(() => {
-      if (!controller.signal.aborted) {
-        setIsFavoriteStatusesLoading(true)
-        setFavoriteStatusMessage('')
-      }
-    })
-    getFavoriteStatuses(goodsIds, controller.signal)
-      .then((response) => {
-        if (controller.signal.aborted) return
-        const nextStatuses: Record<number, boolean> = Object.fromEntries(
-          goodsIds.map((goodsId) => [goodsId, false]),
-        )
-        response.items.forEach((status) => {
-          nextStatuses[status.auction_goods_id] = status.is_favorite
-        })
-        setFavoriteStatuses(nextStatuses)
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) {
-          setFavoriteStatuses({})
-          setFavoriteStatusMessage(getKoreanErrorMessage(error, '관심 상태를 불러오지 못했습니다.'))
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setIsFavoriteStatusesLoading(false)
-      })
-
-    return () => controller.abort()
-  }, [authenticatedUserKey, items])
+  }, [currentSearchParams, retryKey, searchMode, setSearchParams, usageContextKey])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -420,6 +379,14 @@ export default function SearchResultsPage() {
   const handleSortChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const next = new URLSearchParams(currentSearchParams)
     next.set('sort_by', event.target.value)
+    next.set('offset', '0')
+    setSearchParams(next)
+  }
+
+  const handleUsageSelect = (usage: string | null) => {
+    const next = new URLSearchParams(currentSearchParams)
+    next.delete('goods_usage')
+    if (usage !== null) next.append('goods_usage', usage)
     next.set('offset', '0')
     setSearchParams(next)
   }
@@ -487,6 +454,15 @@ export default function SearchResultsPage() {
             )}
           </div>
 
+          <SearchUsageFilter
+            contextKey={usageContextKey}
+            params={usageParams}
+            mode={searchMode}
+            seed={usageSeed}
+            selected={currentSearchParams.getAll('goods_usage')}
+            onSelect={handleUsageSelect}
+          />
+
           {isLoading && (
             <div className="flex min-h-80 items-center justify-center rounded-lg border border-gray-200 bg-white" role="status">
               <Loader2 className="h-7 w-7 animate-spin text-indigo-600" />
@@ -507,12 +483,6 @@ export default function SearchResultsPage() {
             </div>
           )}
 
-          {!isLoading && !errorMessage && favoriteStatusMessage && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800" role="status">
-              {favoriteStatusMessage} 관심 저장 버튼은 계속 사용할 수 있습니다.
-            </div>
-          )}
-
           {!isLoading && !errorMessage && items.length === 0 && (
             <div className="rounded-lg border border-gray-200 bg-white p-10 text-center">
               <p className="text-lg font-extrabold text-slate-900">조건에 맞는 물건이 없습니다.</p>
@@ -526,11 +496,8 @@ export default function SearchResultsPage() {
                 <ResultCard
                   key={`${goods.schedule_id}-${goods.auction_goods_id}`}
                   goods={goods}
-                  isFavorite={favoriteStatuses[goods.auction_goods_id] ?? false}
-                  isFavoriteStatusLoading={isSignedIn && isFavoriteStatusesLoading}
-                  onFavoriteChange={(auctionGoodsId, isFavorite) => {
-                    setFavoriteStatuses((current) => ({ ...current, [auctionGoodsId]: isFavorite }))
-                  }}
+                  previewCache={previewCache}
+                  today={today}
                 />
               ))}
             </div>

@@ -103,14 +103,6 @@ export function replaceAuthSession(payload: AuthSessionPayload) {
   storeAuthSession(payload)
 }
 
-export function replaceAuthUser(user: object) {
-  if (!currentSession || typeof user !== 'object' || user === null) {
-    return
-  }
-  currentSession = { ...currentSession, user }
-  publishSessionChange()
-}
-
 export function clearAuthSession() {
   currentSession = null
   legacyRefreshToken = null

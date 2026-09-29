@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CalendarClock,
@@ -7,9 +7,9 @@ import {
   Clock3,
   Loader2,
   MapPin,
-  Search,
 } from 'lucide-react'
 import Layout from '../components/Layout'
+import AutoSearchForm from '../components/AutoSearchForm'
 import {
   searchScheduledGoods,
   type ScheduledAuctionItem,
@@ -71,13 +71,14 @@ export default function ScheduledSearchPage() {
   const [maxClaim, setMaxClaim] = useState('')
   const [deadlineState, setDeadlineState] = useState<'all' | 'passed' | 'not-passed'>('all')
   const [sortBy, setSortBy] = useState<ScheduledSortBy>('commence_date_desc')
-  const [appliedParams, setAppliedParams] = useState<ScheduledSearchParams>({ limit: PAGE_SIZE, offset: 0, sort_by: 'commence_date_desc' })
+  const [appliedParams, setAppliedParams] = useState<ScheduledSearchParams | null>({ limit: PAGE_SIZE, offset: 0, sort_by: 'commence_date_desc' })
   const [items, setItems] = useState<ScheduledAuctionItem[]>([])
   const [total, setTotal] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
+    if (!appliedParams) return
     const controller = new AbortController()
     let isActive = true
     queueMicrotask(() => {
@@ -110,8 +111,9 @@ export default function ScheduledSearchPage() {
     }
   }, [appliedParams])
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleSearch = () => {
+    setAppliedParams(null)
+    setIsLoading(false)
     const parsedMinYear = optionalNonNegative(minYear, 1900)
     const parsedMaxYear = optionalNonNegative(maxYear, 1900)
     const parsedMinClaim = optionalNonNegative(minClaim)
@@ -142,15 +144,16 @@ export default function ScheduledSearchPage() {
     })
   }
 
-  const offset = appliedParams.offset || 0
-  const movePage = (nextOffset: number) => setAppliedParams((current) => ({ ...current, offset: Math.max(0, nextOffset) }))
+  const offset = appliedParams?.offset || 0
+  const movePage = (nextOffset: number) => setAppliedParams((current) => current ? { ...current, offset: Math.max(0, nextOffset) } : current)
 
   return (
     <Layout>
       <div className="w-full flex-grow bg-slate-50 px-4 py-5">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
           <div><h1 className="flex items-center gap-2 text-2xl font-extrabold text-slate-900"><CalendarClock className="h-6 w-6 text-indigo-600" /> 첫 매각기일 미지정 물건</h1><p className="mt-1 text-sm text-gray-500">경매 사건과 물건은 등록됐지만 아직 매각일정과 한 번도 연결되지 않은 물건입니다. 미래 매각일이 확정됐다는 뜻은 아닙니다.</p></div>
-          <form onSubmit={handleSubmit} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <p className="text-xs text-gray-500">조건을 선택하거나 입력을 마치면 결과가 자동으로 갱신됩니다.</p>
+          <AutoSearchForm onSearch={handleSearch} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="통합 검색어" className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm" />
               <input value={courtCode} onChange={(event) => setCourtCode(event.target.value)} placeholder="법원 코드 (정확히 일치)" className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm" />
@@ -163,11 +166,10 @@ export default function ScheduledSearchPage() {
               <input inputMode="numeric" value={maxYear} onChange={(event) => setMaxYear(event.target.value)} placeholder="최대 사건연도" className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm" />
               <input inputMode="numeric" value={minClaim} onChange={(event) => setMinClaim(event.target.value)} placeholder="최소 청구금액" className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm" />
               <input inputMode="numeric" value={maxClaim} onChange={(event) => setMaxClaim(event.target.value)} placeholder="최대 청구금액" className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm" />
-              <select value={deadlineState} onChange={(event) => setDeadlineState(event.target.value as typeof deadlineState)} className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm"><option value="all">배당종기 전체</option><option value="not-passed">배당종기 미경과</option><option value="passed">배당종기 경과</option></select>
-              <select value={sortBy} onChange={(event) => setSortBy(event.target.value as ScheduledSortBy)} className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm"><option value="commence_date_desc">개시결정 최신순</option><option value="commence_date_asc">개시결정 오래된순</option><option value="demand_deadline_asc">배당종기 빠른순</option><option value="demand_deadline_desc">배당종기 늦은순</option></select>
+              <select aria-label="배당종기 상태" value={deadlineState} onChange={(event) => setDeadlineState(event.target.value as typeof deadlineState)} className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm"><option value="all">배당종기 전체</option><option value="not-passed">배당종기 미경과</option><option value="passed">배당종기 경과</option></select>
+              <select aria-label="예정물건 정렬" value={sortBy} onChange={(event) => setSortBy(event.target.value as ScheduledSortBy)} className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm"><option value="commence_date_desc">개시결정 최신순</option><option value="commence_date_asc">개시결정 오래된순</option><option value="demand_deadline_asc">배당종기 빠른순</option><option value="demand_deadline_desc">배당종기 늦은순</option></select>
             </div>
-            <button type="submit" className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-extrabold text-white hover:bg-indigo-700 sm:w-auto"><Search className="h-4 w-4" /> 예정물건 검색</button>
-          </form>
+          </AutoSearchForm>
 
           {isLoading && <div className="flex min-h-72 items-center justify-center rounded-xl border border-gray-200 bg-white"><Loader2 className="h-7 w-7 animate-spin text-indigo-600" /></div>}
           {!isLoading && errorMessage && <div className="rounded-xl border border-red-100 bg-red-50 p-5 text-sm font-bold text-red-700">{errorMessage}</div>}

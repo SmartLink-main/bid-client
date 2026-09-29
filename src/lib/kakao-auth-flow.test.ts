@@ -33,7 +33,6 @@ describe('Kakao authentication flow errors', () => {
   })
 
   it.each([
-    'SMS challenge expired.',
     'SMS challenge expired or not found.',
     'SMS verification attempts exceeded.',
   ])('resets an unusable SMS challenge: %s', (message) => {

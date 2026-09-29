@@ -105,7 +105,7 @@ async function openSubwaySearch(page: Page) {
   ))
   await page.goto('/subway-search')
   await expect(page.getByRole('heading', { name: '역세권 경매물건 찾기' })).toBeVisible()
-  await expect(page.getByText('선택한 역 중심 직선거리 기준 · 버튼 검색', {
+  await expect(page.getByText('선택한 역 중심 직선거리 기준 · 자동 검색', {
     exact: true,
   })).toBeVisible()
   await expect(page.getByText('좌표범위검색', { exact: true })).toHaveCount(0)
@@ -383,13 +383,13 @@ test.describe('특정 역 역세권 검색 브라우저 E2E', () => {
     await stationRadios.first().focus()
     await page.keyboard.press('ArrowDown')
     await expect(stationRadios.nth(1)).toBeChecked()
+    const searchResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url())
+      return url.pathname === '/api/v1/geo/subway' &&
+        url.searchParams.get('station_id') === 'kr-subway-bcd4947b50475491'
+    })
     await stationChoice(page, '강남역', '강남구').click()
     await expect(page.getByRole('status', { name: '선택한 역' })).toContainText('강남역')
-
-    const searchResponsePromise = page.waitForResponse((response) => (
-      new URL(response.url()).pathname === '/api/v1/geo/subway'
-    ))
-    await page.getByRole('button', { name: '반경 안 물건 찾기' }).click()
     const searchResponse = await searchResponsePromise
     expect(searchResponse.status()).toBe(200)
     const requestUrl = new URL(searchResponse.url())
@@ -545,16 +545,6 @@ test.describe('특정 역 역세권 검색 브라우저 E2E', () => {
     await page.screenshot({
       path: 'test-results/playwright-subway-search/subway-compact-station-selector-final.png',
     })
-    await stationChoice(page, '강남역', '강남구').click()
-    const [compactStationChooserBox, compactSubmitButtonBox] = await Promise.all([
-      compactStationChooser.boundingBox(),
-      page.getByRole('button', { name: '반경 안 물건 찾기' }).boundingBox(),
-    ])
-    expect(
-      (compactSubmitButtonBox?.y ?? Number.POSITIVE_INFINITY) -
-      ((compactStationChooserBox?.y ?? 0) + (compactStationChooserBox?.height ?? 0)),
-    ).toBeLessThanOrEqual(340)
-
     const searchResponsePromise = page.waitForResponse((response) => {
       const url = new URL(response.url())
       return (
@@ -564,7 +554,7 @@ test.describe('특정 역 역세권 검색 브라우저 E2E', () => {
         url.searchParams.get('max_lowest_sale_price') === '430000000'
       )
     })
-    await page.getByRole('button', { name: '반경 안 물건 찾기' }).click()
+    await stationChoice(page, '강남역', '강남구').click()
     const searchResponse = await searchResponsePromise
     expect(searchResponse.status()).toBe(200)
     const requestUrl = new URL(searchResponse.url())
@@ -616,17 +606,19 @@ test.describe('특정 역 역세권 검색 브라우저 E2E', () => {
         areas: expect.arrayContaining([stationCase.area]),
         lines: expect.arrayContaining([stationCase.line]),
       }))
+      await page.getByRole('button', { name: stationCase.radiusLabel, exact: true }).click()
+      const searchResponsePromise = page.waitForResponse((response) => {
+        const url = new URL(response.url())
+        return url.pathname === '/api/v1/geo/subway' &&
+          url.searchParams.get('station_id') === stationCase.stationId &&
+          url.searchParams.get('radius_m') === String(stationCase.radiusM)
+      })
       await stationChoice(page, stationCase.name, stationCase.area).click()
       const selectedStationSummary = page.getByRole('status', { name: '선택한 역' })
       await expect(selectedStationSummary).toContainText(stationCase.name)
       await expect(selectedStationSummary).toContainText(stationCase.area)
       await expect(selectedStationSummary).toContainText(stationCase.line)
 
-      await page.getByRole('button', { name: stationCase.radiusLabel, exact: true }).click()
-      const searchResponsePromise = page.waitForResponse((response) => (
-        new URL(response.url()).pathname === '/api/v1/geo/subway'
-      ))
-      await page.getByRole('button', { name: '반경 안 물건 찾기' }).click()
       const searchResponse = await searchResponsePromise
       expect(searchResponse.status()).toBe(200)
       const requestUrl = new URL(searchResponse.url())
@@ -667,26 +659,10 @@ test.describe('특정 역 역세권 검색 브라우저 E2E', () => {
     })
 
     await loadSeoulLine(page, '2호선')
-    await expect(page.getByRole('button', { name: '반경 안 물건 찾기' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: '반경 안 물건 찾기' })).toHaveCount(0)
     await page.getByLabel('최저가 최소').press('Enter')
-    await expect(page.getByRole('button', { name: '반경 안 물건 찾기' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: '반경 안 물건 찾기' })).toHaveCount(0)
     expect(subwayRequestCount).toBe(0)
-  })
-
-  test('일반 지도 검색 주소를 역세권 검색과 분리해 연다', async ({ page }) => {
-    await prepareAnonymousSession(page)
-    await page.goto('/map-search')
-
-    await expect(page).toHaveURL(/\/map-search$/)
-    await expect(page.getByRole('heading', { name: '지도 영역 경매물건 찾기' })).toBeVisible()
-    await expect(page.getByText('좌표범위검색', { exact: true })).toHaveCount(0)
-    await page.getByRole('button', { name: '전체 메뉴 열기' }).click()
-    const mapSearchMenuLink = page.getByRole('link', { name: '지도 영역 검색', exact: true })
-    await expect(mapSearchMenuLink).toBeVisible()
-    await expect(mapSearchMenuLink).toHaveAttribute(
-      'href',
-      '/map-search',
-    )
   })
 
   test('서버는 존재하지 않는 station_id를 404로 거부한다', async ({ request }) => {

@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import {
   Gavel, Menu, X, Landmark, MapPin, Building, BadgePercent,
-  Gem, Briefcase,
+  Gem,
   BookOpen, Headphones, Info, CalendarRange, SlidersHorizontal,
   MapPinned, TrainFront, Clock3, UserRound,
   UsersRound, Activity, Heart, MessageSquareReply,
@@ -13,15 +13,42 @@ import { clearAuthSession } from '../lib/session';
 
 interface LayoutProps {
   children: React.ReactNode;
+  fullHeight?: boolean;
 }
 
-export default function Layout({ children }: LayoutProps) {
+export default function Layout({ children, fullHeight = false }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const sidebarHoverTimer = useRef<number | undefined>(undefined);
   const authSession = useAuthSession();
   const isSignedIn = Boolean(authSession);
   const sessionUser = authSession?.user as { name?: string | null; login_id?: string | null; access_group?: string } | undefined;
   const isAdmin = sessionUser?.access_group === 'admin';
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
+  const cancelSidebarHover = () => {
+    window.clearTimeout(sidebarHoverTimer.current);
+    sidebarHoverTimer.current = undefined;
+  };
+
+  const openSidebar = () => {
+    cancelSidebarHover();
+    setIsSidebarOpen(true);
+  };
+
+  const handleSidebarPointerEnter = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType !== 'mouse') return;
+    cancelSidebarHover();
+    // Give clicks priority and avoid opening when the pointer only passes over the icon.
+    sidebarHoverTimer.current = window.setTimeout(openSidebar, 75);
+  };
+
+  const handleSidebarPointerLeave = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== 'mouse') return;
+    cancelSidebarHover();
+    setIsSidebarOpen(false);
+  };
+
+  useEffect(() => () => window.clearTimeout(sidebarHoverTimer.current), []);
 
   useEffect(() => {
     if (!isSidebarOpen) return;
@@ -44,10 +71,10 @@ export default function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div className="bg-slate-50 min-h-screen w-full flex flex-col text-gray-800 font-sans">
+    <div className={`bg-slate-50 w-full flex flex-col text-gray-800 font-sans ${fullHeight ? 'h-dvh min-h-0 overflow-hidden' : 'min-h-screen'}`}>
       
       {/* 상단 헤더 */}
-      <header className="flex justify-center w-full z-10 bg-white shadow-sm relative">
+      <header className={`flex justify-center w-full z-10 bg-white shadow-sm relative ${fullHeight ? 'shrink-0' : ''}`}>
         <div className="w-full max-w-7xl flex justify-between items-center px-6 py-4 md:px-10">
           <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity shrink-0">
             <Gavel className="w-8 h-8 text-blue-900" />
@@ -87,7 +114,18 @@ export default function Layout({ children }: LayoutProps) {
                 </Link>
               </>
             )}
-            <button type="button" aria-label="전체 메뉴 열기" onClick={toggleSidebar} className="p-2 ml-1 md:ml-2 text-gray-600 hover:text-blue-900 hover:bg-gray-100 rounded-lg transition-colors">
+            <button
+              type="button"
+              aria-label="전체 메뉴 열기"
+              aria-expanded={isSidebarOpen}
+              aria-controls="sidebar-drawer"
+              aria-haspopup="dialog"
+              onPointerEnter={handleSidebarPointerEnter}
+              onPointerLeave={cancelSidebarHover}
+              onPointerCancel={cancelSidebarHover}
+              onClick={openSidebar}
+              className="p-3 -my-1 ml-1 md:ml-2 text-gray-600 hover:text-blue-900 hover:bg-gray-100 rounded-lg transition-colors"
+            >
               <Menu className="w-6 h-6 md:w-7 md:h-7" />
             </button>
           </nav>
@@ -95,12 +133,12 @@ export default function Layout({ children }: LayoutProps) {
       </header>
 
       {/* 메인 콘텐츠 영역 */}
-      <main className="flex-grow flex flex-col items-center w-full relative">
+      <main className={`flex flex-col items-center w-full relative ${fullHeight ? 'min-h-0 flex-1 overflow-hidden' : 'flex-grow'}`}>
         {children}
       </main>
 
       {/* 푸터 */}
-      <footer className="w-full flex justify-center py-6 text-gray-400 text-sm bg-white mt-10 border-t border-gray-100">
+      {!fullHeight && <footer className="w-full flex justify-center py-6 text-gray-400 text-sm bg-white mt-10 border-t border-gray-100">
         <div className="w-full max-w-7xl px-6 md:px-10 flex flex-col md:flex-row justify-between items-center gap-2 md:gap-4 text-center">
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
             <Link to="/terms-of-service" className="hover:text-gray-600 transition-colors">이용약관</Link>
@@ -110,27 +148,29 @@ export default function Layout({ children }: LayoutProps) {
           </div>
           <p className="mt-2 md:mt-0">&copy; 2026 bid. 별도 고지된 제3자 콘텐츠 제외.</p>
         </div>
-      </footer>
+      </footer>}
 
       {/* 사이드바 오버레이 */}
       {isSidebarOpen && (
         <div
           data-testid="sidebar-backdrop"
           aria-hidden="true"
-          className="fixed inset-0 z-[2000] bg-black/40 transition-opacity duration-300"
+          className="fixed inset-0 z-[2000] bg-black/40 transition-opacity duration-150"
           onClick={toggleSidebar}
         />
       )}
 
       {/* 우측 슬라이드 사이드바 */}
       <div
+        id="sidebar-drawer"
         role="dialog"
         aria-label="전체 메뉴"
         aria-modal={isSidebarOpen ? 'true' : undefined}
         aria-hidden={!isSidebarOpen}
         inert={!isSidebarOpen}
         data-testid="sidebar-drawer"
-        className={`fixed right-0 top-0 z-[2010] flex h-full w-72 transform flex-col bg-white shadow-2xl transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        onPointerLeave={handleSidebarPointerLeave}
+        className={`fixed right-0 top-0 z-[2010] flex h-full w-72 transform flex-col bg-white shadow-2xl transition-transform duration-150 ease-out ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <div className="flex justify-between items-center p-5 border-b border-gray-100">
           <Link to="/" className="text-xl font-extrabold text-blue-900 flex items-center gap-2 hover:opacity-80 transition-opacity shrink-0" onClick={toggleSidebar}>
@@ -168,9 +208,6 @@ export default function Layout({ children }: LayoutProps) {
           </Link>
           <Link to="/special-search" className="flex items-center gap-3 p-3 hover:bg-blue-50 hover:text-blue-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
             <Gem className="w-5 h-5 text-gray-400 group-hover:text-blue-600" /> 특수물건검색
-          </Link>
-          <Link to="/npl-search" className="flex items-center gap-3 p-3 hover:bg-blue-50 hover:text-blue-700 rounded-lg text-gray-700 font-medium transition-colors group" onClick={toggleSidebar}>
-            <Briefcase className="w-5 h-5 text-gray-400 group-hover:text-blue-600" /> NPL 후보분석
           </Link>
 
           <hr className="my-3 border-gray-100" />

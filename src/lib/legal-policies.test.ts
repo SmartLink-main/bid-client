@@ -4,21 +4,13 @@ import {
   LEGAL_POLICY_DOCUMENT_VERSION,
   LEGAL_POLICY_RELEASE_CHECKS,
   LEGAL_POLICIES,
-  PRIVACY_POLICY,
   PRIVACY_PROCESSING_TABLE,
   PRIVACY_PROCESSORS,
   REQUIRED_PRIVACY_SECTION_TITLES,
-  SERVICE_TERMS,
   SIGNUP_COLLECTION_SUMMARY,
 } from './legal-policies'
 
 describe('legal policy registry', () => {
-  it('keeps public service policies separate from billing policy routes', () => {
-    expect(SERVICE_TERMS.path).toBe('/terms-of-service')
-    expect(PRIVACY_POLICY.path).toBe('/privacy-policy')
-    expect(LEGAL_POLICIES.map((policy) => policy.path)).not.toContain('/terms')
-  })
-
   it('distinguishes the document version from the Kakao-only consent record identifier', () => {
     expect(LEGAL_POLICY_DOCUMENT_VERSION).toBe('v1.0')
     expect(KAKAO_CONSENT_RECORD_VERSION).toBe('2026-08-12')

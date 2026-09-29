@@ -2,12 +2,16 @@
 
 `bid_auction_app`이 제공하는 경매·인증 API를 사용하는 React/Vite 클라이언트다.
 
+결제 화면과 관련 변경은 `feat/payment-isolation` 브랜치와 형제 작업 폴더
+`../bid-client-billing`에 분리했다. 현재 `main`은 결제 메뉴를 노출하지 않으며
+기존 결제 주소는 홈으로 이동한다.
+
 백엔드의 실제 `/api/v1` 라우트와 화면 진입점은
 [API 연동표](docs/API_INTEGRATION.md)에 정리되어 있다.
 
 주요 화면:
 
-- 기본·종합·구조화 NPL 후보·특수물건 검색
+- 기본·종합·특수물건 검색
 - WGS84 지도 뷰포트와 서버 역 스냅샷 기반 역세권 검색
 - 첫 매각기일 미지정 예정물건 검색
 - 월간 경매 일정과 상세공고 JSON/HTML
@@ -70,10 +74,17 @@ npm test
 npm run lint
 npm run build
 npm run test:e2e:install
-npm run test:e2e:all
+npm run test:e2e:full
 ```
 
+단위 테스트는 경계값·인증 상태·전체 지역 데이터의 정합성을 검증한다. Playwright는
+실제 입력·클릭·이동과 주요 실패 흐름에 집중하며, 단위 테스트에서 확인하는 지역별
+데이터를 브라우저에서 전수 반복하지 않는다. 화면은 고정된 여백 픽셀값보다 모바일
+가로 넘침, 선택 가능 여부, 키보드 조작과 결과 표시를 기준으로 검증한다.
+
 Playwright 설정은 형제 백엔드 worktree의 격리 하네스와 로컬 전용 SQLite/Redis DB를
-사용한다. 각 suite는 전용 포트를 사용하지만 전체 검사는 포트 충돌을 피하도록 순서대로
-실행한다. `playwright-report/`와 `test-results/`에는 테스트 계정 정보가 담길 수 있으므로
+사용한다. `test:e2e:all`은 기능 회귀 검사를 실행하며, 같은 하네스를 쓰는 검색 화면과
+지도 화면은 한 번씩 묶어서 서버 재기동을 줄인다. 성능 측정까지 필요하면
+`test:e2e:full`을 실행한다. 각 suite는 전용 포트를 사용하지만 전체 검사는 포트 충돌을
+피하도록 순서대로 실행한다. `playwright-report/`와 `test-results/`에는 테스트 계정 정보가 담길 수 있으므로
 Git에 포함하거나 확인 없이 공유하지 않는다.

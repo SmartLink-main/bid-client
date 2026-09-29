@@ -9,6 +9,42 @@ body {
   font-family: var(--font-sans);
 }
 
+.map-region-cluster {
+  border: 0;
+  background: transparent;
+}
+
+.map-region-cluster-content {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 2px solid white;
+  border-radius: 16px;
+  background: #1d4ed8;
+  color: white;
+  box-shadow: 0 3px 12px rgb(15 23 42 / 25%);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.map-region-cluster-name {
+  max-width: 78px;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-region-cluster:hover .map-region-cluster-content,
+.map-region-cluster:focus-visible .map-region-cluster-content {
+  background: #1e40af;
+  outline: 3px solid #93c5fd;
+}
+
 @layer base {
   :where(
     a[href],

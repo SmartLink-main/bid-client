@@ -1,7 +1,6 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { Search, Landmark } from 'lucide-react';
+import { Landmark } from 'lucide-react';
 
 // ==========================================
 // 전국 법원 데이터 (한 페이지 전체 출력용 평면 구조)
@@ -25,15 +24,10 @@ const courtDataList = [
 
 export default function CourtSearchPage() {
   const navigate = useNavigate();
-  const [selectedCourt, setSelectedCourt] = useState({
-    group: courtDataList[0].group,
-    name: courtDataList[0].items[0],
-  });
-
-  const handleSearch = () => {
+  const handleSearch = (group: string, court: string) => {
     navigate(`/search?${new URLSearchParams({
-      court_name: selectedCourt.group.replace('지방법원', ''),
-      branch_name: selectedCourt.name,
+      court_name: group.replace('지방법원', ''),
+      branch_name: court,
     })}`);
   };
 
@@ -49,7 +43,7 @@ export default function CourtSearchPage() {
             </div>
             <div>
               <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight mb-0.5">법원별검색</h2>
-              <p className="text-gray-500 text-[13.5px]">전국 관할 법원을 한눈에 확인하고 원하시는 법원을 선택해 보세요.</p>
+              <p className="text-gray-500 text-[13.5px]">법원을 누르면 해당 법원의 물건을 바로 검색합니다.</p>
             </div>
           </div>
 
@@ -72,16 +66,12 @@ export default function CourtSearchPage() {
                   {/* 오른쪽: 관할 세부 법원 버튼들 */}
                   <div data-testid="court-options" className="flex flex-wrap gap-x-2.5 gap-y-2 flex-grow">
                     {section.items.map((court) => {
-                      const isChecked = selectedCourt.group === section.group && selectedCourt.name === court;
                       return (
                         <button
                           key={court}
-                          onClick={() => setSelectedCourt({ group: section.group, name: court })}
-                          className={`px-4 py-2 text-[14px] font-bold rounded-lg transition-all border ${
-                            isChecked
-                              ? 'bg-indigo-50 border-indigo-500 text-indigo-700 shadow-sm ring-1 ring-indigo-500'
-                              : 'bg-white border-gray-200 text-gray-600 hover:bg-indigo-50/50 hover:border-indigo-300 hover:text-indigo-600'
-                          }`}
+                          type="button"
+                          onClick={() => handleSearch(section.group, court)}
+                          className="px-4 py-2 text-[14px] font-bold rounded-lg transition-all border bg-white border-gray-200 text-gray-600 hover:bg-indigo-50/50 hover:border-indigo-300 hover:text-indigo-600"
                         >
                           {court}
                         </button>
@@ -91,26 +81,6 @@ export default function CourtSearchPage() {
                   
                 </div>
               ))}
-            </div>
-
-            {/* 하단 고정 검색 바 */}
-            <div className="bg-indigo-50 py-4 px-5 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 mt-auto border-t border-indigo-100 sticky bottom-0">
-              <div className="flex items-center gap-3 text-indigo-900 w-full sm:w-auto">
-                <span className="text-indigo-600 text-[14.5px] font-bold shrink-0">선택된 법원:</span>
-                <div className="flex items-center gap-2 bg-white border border-indigo-200 px-4 py-2.5 rounded-xl shadow-sm w-full truncate">
-                  <Landmark className="w-4 h-4 text-indigo-500 shrink-0" />
-                  <span className="font-extrabold text-[15px] tracking-tight text-indigo-900 truncate">
-                    {selectedCourt.name}
-                  </span>
-                </div>
-              </div>
-              
-              <button 
-                onClick={handleSearch}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-3 px-10 rounded-xl shadow-md transition-all text-[15.5px] shrink-0"
-              >
-                <Search className="w-5 h-5" /> 물건 검색하기
-              </button>
             </div>
 
           </div>

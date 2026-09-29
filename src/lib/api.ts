@@ -209,6 +209,24 @@ export function getApiUrl(path = '') {
   return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
 }
 
+/** 빈 검색값은 생략하고 배열은 같은 키를 반복하는 API 쿼리로 직렬화한다. */
+export function withQuery(path: string, params: object) {
+  const query = new URLSearchParams()
+
+  function appendValue(key: string, value: unknown) {
+    if (value === undefined || value === null || value === '') return
+    if (Array.isArray(value)) {
+      value.forEach((item) => appendValue(key, item))
+      return
+    }
+    query.append(key, String(value))
+  }
+
+  Object.entries(params).forEach(([key, value]) => appendValue(key, value))
+  const suffix = query.toString()
+  return suffix ? `${path}?${suffix}` : path
+}
+
 export function apiFetch(
   path: string,
   init?: RequestInit,

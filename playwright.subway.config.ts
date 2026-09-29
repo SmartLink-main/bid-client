@@ -1,4 +1,4 @@
-import { defineConfig, devices, type WebServerConfig } from '@playwright/test'
+import { defineConfig, devices, type PlaywrightTestConfig } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
 import { resolve } from 'node:path'
 import { env, pid } from 'node:process'
@@ -36,7 +36,7 @@ function requireSafeLoopbackOrigin(value: string, name: string) {
 requireSafeLoopbackOrigin(baseURL, 'subway-search baseURL')
 requireSafeLoopbackOrigin(apiBaseURL, 'subway-search apiBaseURL')
 
-const webServer: WebServerConfig[] = [
+const webServer: PlaywrightTestConfig['webServer'] = [
   {
     command: (
       `python -m uvicorn app.tests.e2e.search.harness_app:app ` +

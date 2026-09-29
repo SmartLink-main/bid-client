@@ -39,13 +39,6 @@ const inquiry: Inquiry = {
   answered_at: null,
 }
 
-function jsonResponse(payload: unknown) {
-  return new Response(JSON.stringify(payload), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  })
-}
-
 beforeEach(() => {
   storeAuthSession(authResponse)
 })
@@ -58,7 +51,7 @@ afterEach(() => {
 
 describe('inquiry API client', () => {
   it('creates a user inquiry with bearer authentication', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(inquiry))
+    const fetchMock = vi.fn().mockResolvedValue(Response.json(inquiry))
     vi.stubGlobal('fetch', fetchMock)
     const controller = new AbortController()
 
@@ -90,13 +83,13 @@ describe('inquiry API client', () => {
       },
     }
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({
+      .mockResolvedValueOnce(Response.json({
         total: 1,
         limit: 20,
         offset: 10,
         items: [inquiry],
       }))
-      .mockResolvedValueOnce(jsonResponse({
+      .mockResolvedValueOnce(Response.json({
         total: 1,
         limit: 30,
         offset: 0,
@@ -132,7 +125,7 @@ describe('inquiry API client', () => {
         name: authResponse.user.name,
       },
     }
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(answered))
+    const fetchMock = vi.fn().mockResolvedValue(Response.json(answered))
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(answerInquiry(inquiry.id, '관리자 답변')).resolves.toEqual(answered)

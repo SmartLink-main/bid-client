@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertCircle, Loader2, MapPin, Search } from 'lucide-react'
 import Layout from '../components/Layout'
@@ -43,12 +43,17 @@ export default function QuestionGoodsPage() {
   const [result, setResult] = useState<QuestionGoodsResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const requestVersion = useRef(0)
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const normalizedQuestion = question.trim()
+  useEffect(() => () => { requestVersion.current += 1 }, [])
+
+  const searchQuestion = (value: string) => {
+    const normalizedQuestion = value.trim()
+    const version = ++requestVersion.current
+    setQuestion(value)
 
     if (normalizedQuestion.length < 2) {
+      setIsLoading(false)
       setErrorMessage('질문을 두 글자 이상 입력해 주세요.')
       return
     }
@@ -58,13 +63,23 @@ export default function QuestionGoodsPage() {
     setResult(null)
 
     void askGoodsQuestion({ question: normalizedQuestion })
-      .then(setResult)
+      .then((response) => {
+        if (version === requestVersion.current) setResult(response)
+      })
       .catch((error: unknown) => {
+        if (version !== requestVersion.current) return
         setErrorMessage(
           getKoreanErrorMessage(error, '질문에 맞는 경매 물건을 찾지 못했습니다.'),
         )
       })
-      .finally(() => setIsLoading(false))
+      .finally(() => {
+        if (version === requestVersion.current) setIsLoading(false)
+      })
+  }
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    searchQuestion(question)
   }
 
   return (
@@ -91,6 +106,7 @@ export default function QuestionGoodsPage() {
                   <Search className="h-5 w-5 shrink-0 text-indigo-600" />
                   <input
                     id="goods-question"
+                    enterKeyHint="search"
                     value={question}
                     onChange={(event) => setQuestion(event.target.value)}
                     placeholder="예: 서울 강남 7억 이하 아파트 찾아줘"
@@ -99,26 +115,20 @@ export default function QuestionGoodsPage() {
                     required
                   />
                 </div>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 text-sm font-extrabold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                  {isLoading ? '추천 중' : '물건 추천'}
-                </button>
+
               </div>
             </form>
+            <p className="mt-3 text-xs text-indigo-100">문장 입력 후 Enter를 누르거나 아래 추천 항목을 선택하세요.</p>
           </section>
 
           <div className="mt-5 flex flex-wrap gap-2 text-xs font-bold text-gray-500">
-            <button type="button" onClick={() => setQuestion('서울 5억 이하 아파트 찾아줘')} className="rounded-full border border-gray-200 bg-white px-3 py-2 hover:border-indigo-300 hover:text-indigo-700">
+            <button type="button" onClick={() => searchQuestion('서울 5억 이하 아파트 찾아줘')} className="rounded-full border border-gray-200 bg-white px-3 py-2 hover:border-indigo-300 hover:text-indigo-700">
               서울 5억 이하 아파트
             </button>
-            <button type="button" onClick={() => setQuestion('유치권 있는 주거용 물건 찾아줘')} className="rounded-full border border-gray-200 bg-white px-3 py-2 hover:border-indigo-300 hover:text-indigo-700">
+            <button type="button" onClick={() => searchQuestion('유치권 있는 주거용 물건 찾아줘')} className="rounded-full border border-gray-200 bg-white px-3 py-2 hover:border-indigo-300 hover:text-indigo-700">
               유치권 있는 주거용
             </button>
-            <button type="button" onClick={() => setQuestion('부산 상가 경매 물건 추천')} className="rounded-full border border-gray-200 bg-white px-3 py-2 hover:border-indigo-300 hover:text-indigo-700">
+            <button type="button" onClick={() => searchQuestion('부산 상가 경매 물건 추천')} className="rounded-full border border-gray-200 bg-white px-3 py-2 hover:border-indigo-300 hover:text-indigo-700">
               부산 상가
             </button>
           </div>

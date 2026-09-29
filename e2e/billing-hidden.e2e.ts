@@ -45,11 +45,14 @@ test.describe('결제 UI 비노출 브라우저 E2E', () => {
     await expect(page.getByRole('link', { name: '환불 안내', exact: true })).toHaveCount(0)
 
     await page.getByRole('button', { name: '전체 메뉴 열기' }).click()
+    await expect(page.getByRole('link', { name: '이용권 안내', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: '이용권·결제 내역', exact: true })).toHaveCount(0)
     await expect(page.getByRole('link', { name: '요금제 보기', exact: true })).toHaveCount(0)
     await expect(page.getByRole('link', { name: '결제 관리', exact: true })).toHaveCount(0)
 
     await page.goto('/account')
     await expect(page.getByRole('heading', { name: '내 계정', exact: true })).toBeVisible()
+    await expect(page.getByRole('link', { name: /이용권·결제 내역/ })).toHaveCount(0)
     await expect(page.getByRole('link', { name: '결제 관리', exact: true })).toHaveCount(0)
     expect(billingApiRequests).toBe(0)
   })

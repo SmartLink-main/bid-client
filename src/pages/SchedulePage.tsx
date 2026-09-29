@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   CalendarDays,
@@ -7,7 +7,6 @@ import {
   ExternalLink,
   Landmark,
   Loader2,
-  Search,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 import {
@@ -244,8 +243,8 @@ export default function SchedulePage() {
       branch_name: branchFilter || undefined,
     }
   }, [branchFilter, courtFilter, monthKey])
-  const [courtName, setCourtName] = useState(courtFilter)
-  const [branchName, setBranchName] = useState(branchFilter)
+  const courtName = courtFilter
+  const branchName = branchFilter
   const [items, setItems] = useState<AuctionScheduleListItem[]>([])
   const [selectedDate, setSelectedDate] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -265,12 +264,6 @@ export default function SchedulePage() {
   }, [items])
   const selectedItems = selectedDate ? schedulesByDate.get(selectedDate) || [] : []
 
-  useEffect(() => {
-    queueMicrotask(() => {
-      setCourtName(courtFilter)
-      setBranchName(branchFilter)
-    })
-  }, [branchFilter, courtFilter])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -327,17 +320,11 @@ export default function SchedulePage() {
     setSearchParams(next)
   }
 
-  const handleFilterSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const applyFilters = (court: string, branch = '') => {
     const next = new URLSearchParams({ month: monthKey })
-    if (courtName.trim()) next.set('court_name', courtName.trim())
-    if (branchName.trim()) next.set('branch_name', branchName.trim())
+    if (court) next.set('court_name', court)
+    if (branch) next.set('branch_name', branch)
     setSearchParams(next)
-  }
-
-  const handleCourtChange = (nextCourtName: string) => {
-    setCourtName(nextCourtName)
-    setBranchName('')
   }
 
   const goToToday = () => {
@@ -358,13 +345,13 @@ export default function SchedulePage() {
             <p className="mt-1 text-sm text-gray-500">월별 매각기일을 달력에서 확인하고 날짜별 공고로 바로 이동합니다.</p>
           </div>
 
-          <form onSubmit={handleFilterSubmit} className="grid gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_1fr_auto]">
+          <div className="grid gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:grid-cols-2">
             <div>
               <label htmlFor="schedule-court" className="text-xs font-bold text-gray-500">관할법원</label>
               <select
                 id="schedule-court"
                 value={courtName}
-                onChange={(event) => handleCourtChange(event.target.value)}
+                onChange={(event) => applyFilters(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               >
                 <option value="">전체 관할법원</option>
@@ -376,7 +363,7 @@ export default function SchedulePage() {
               <select
                 id="schedule-branch"
                 value={branchName}
-                onChange={(event) => setBranchName(event.target.value)}
+                onChange={(event) => applyFilters(courtName, event.target.value)}
                 disabled={!courtName}
                 className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-gray-400"
               >
@@ -386,10 +373,8 @@ export default function SchedulePage() {
                 ))}
               </select>
             </div>
-            <button type="submit" className="mt-auto inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-extrabold text-white hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
-              <Search className="h-4 w-4" /> 필터 적용
-            </button>
-          </form>
+
+          </div>
 
           <section aria-labelledby="schedule-month-heading" className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm">

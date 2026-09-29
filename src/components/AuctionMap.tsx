@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AttributionControl,
@@ -11,12 +11,14 @@ import {
   useMapEvents,
 } from 'react-leaflet'
 import { divIcon, icon, latLng, latLngBounds, type Marker as LeafletMarker } from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import markerIconUrl from 'leaflet/dist/images/marker-icon.png'
 import markerIconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png'
 import markerShadowUrl from 'leaflet/dist/images/marker-shadow.png'
 import {
   getGeographicSearchItemKey,
   type GeographicBounds,
+  type GeographicMapCluster,
   type GeographicSearchItem,
   type SubwayStation,
 } from '../lib/auction-extra'
@@ -25,6 +27,7 @@ import { formatMoney } from '../lib/format'
 const DEFAULT_CENTER: [number, number] = [36.35, 127.8]
 
 const defaultMarkerIcon = icon({
+  className: 'auction-property-marker',
   iconUrl: markerIconUrl,
   iconRetinaUrl: markerIconRetinaUrl,
   shadowUrl: markerShadowUrl,
@@ -42,7 +45,7 @@ const stationMarkerIcon = divIcon({
   popupAnchor: [0, -22],
 })
 
-type Point = {
+export type MapPoint = {
   latitude: number
   longitude: number
 }
@@ -56,6 +59,7 @@ export type MapViewportTarget = {
 
 type AuctionMapProps = {
   items: GeographicSearchItem[]
+  clusters?: GeographicMapCluster[] | null
   mode?: 'interactive' | 'station-radius-preview'
   selectedGoodsId?: number | null
   selectedItemKey?: string | null
@@ -64,27 +68,36 @@ type AuctionMapProps = {
   radiusM?: number
   viewportTarget?: MapViewportTarget | null
   viewportZoomSnap?: number
+  minZoom?: number
   onViewportTargetApplied?: (key: string) => void
-  onBoundsChange?: (bounds: GeographicBounds) => void
-  onUserBoundsChange?: (bounds: GeographicBounds) => void
+  onBoundsChange?: (bounds: GeographicBounds, zoom: number) => void
+  onViewportChangeStart?: () => void
+  onUserBoundsChange?: (bounds: GeographicBounds, center: MapPoint) => void
   onSelectGoods?: (auctionGoodsId: number) => void
   onSelectItem?: (itemKey: string) => void
   className?: string
+  fillContainer?: boolean
 }
 
 function FitViewportTarget({
   target,
   enabled,
   onApplied,
+  applyingViewport,
 }: {
   target: MapViewportTarget | null
   enabled: boolean
   onApplied?: (key: string) => void
+  applyingViewport: RefObject<boolean>
 }) {
   const map = useMap()
   const lastAppliedKey = useRef<string | null>(null)
 
   useEffect(() => {
+    if (!target) {
+      lastAppliedKey.current = null
+      return
+    }
     if (!enabled || !target || lastAppliedKey.current === target.key) return
 
     const { west, south, east, north } = target.bounds
@@ -100,20 +113,25 @@ function FitViewportTarget({
     const maxZoom = target.maxZoom ?? 12
     const padding = target.padding ?? 28
 
-    map.stop()
-    lastAppliedKey.current = appliedKey
-    map.fitBounds(targetBounds, {
-      animate: false,
-      padding: [padding, padding],
-      maxZoom,
-    })
+    applyingViewport.current = true
+    try {
+      map.stop()
+      lastAppliedKey.current = appliedKey
+      map.fitBounds(targetBounds, {
+        animate: false,
+        padding: [padding, padding],
+        maxZoom,
+      })
+    } finally {
+      applyingViewport.current = false
+    }
     onApplied?.(appliedKey)
-  }, [enabled, map, onApplied, target])
+  }, [applyingViewport, enabled, map, onApplied, target])
 
   return null
 }
 
-function hasCoordinates(item: GeographicSearchItem): item is GeographicSearchItem & Point {
+function hasCoordinates(item: GeographicSearchItem): item is GeographicSearchItem & MapPoint {
   return (
     typeof item.latitude === 'number' && Number.isFinite(item.latitude) &&
     typeof item.longitude === 'number' && Number.isFinite(item.longitude)
@@ -132,83 +150,41 @@ function readBounds(map: ReturnType<typeof useMap>): GeographicBounds {
 
 function ViewportObserver({
   onBoundsChange,
+  onViewportChangeStart,
   onUserBoundsChange,
+  applyingViewport,
 }: {
-  onBoundsChange: (bounds: GeographicBounds) => void
-  onUserBoundsChange?: (bounds: GeographicBounds) => void
+  onBoundsChange: (bounds: GeographicBounds, zoom: number) => void
+  onViewportChangeStart?: () => void
+  onUserBoundsChange?: (bounds: GeographicBounds, center: MapPoint) => void
+  applyingViewport: RefObject<boolean>
 }) {
-  const userInteractionPending = useRef(false)
-  const userInteractionExpiry = useRef<number | null>(null)
-  const clearUserInteractionExpiry = useCallback(() => {
-    if (userInteractionExpiry.current !== null) {
-      window.clearTimeout(userInteractionExpiry.current)
-      userInteractionExpiry.current = null
-    }
-  }, [])
-  const markUserInteraction = useCallback(() => {
-    clearUserInteractionExpiry()
-    userInteractionPending.current = true
-  }, [clearUserInteractionExpiry])
-  const markTransientUserInteraction = useCallback(() => {
-    markUserInteraction()
-    userInteractionExpiry.current = window.setTimeout(() => {
-      userInteractionPending.current = false
-      userInteractionExpiry.current = null
-    }, 1_500)
-  }, [markUserInteraction])
   const map = useMapEvents({
-    dragstart: markUserInteraction,
+    movestart: () => onViewportChangeStart?.(),
     moveend: () => {
       const bounds = readBounds(map)
-      onBoundsChange(bounds)
-      if (userInteractionPending.current) {
-        userInteractionPending.current = false
-        clearUserInteractionExpiry()
-        onUserBoundsChange?.(bounds)
+      onBoundsChange(bounds, map.getZoom())
+      if (!applyingViewport.current) {
+        const center = map.getCenter()
+        onUserBoundsChange?.(bounds, { longitude: center.lng, latitude: center.lat })
       }
     },
   })
 
   useEffect(() => {
-    onBoundsChange(readBounds(map))
+    onBoundsChange(readBounds(map), map.getZoom())
   }, [map, onBoundsChange])
 
+  return null
+}
+
+function MapSizeObserver() {
+  const map = useMap()
   useEffect(() => {
-    const container = map.getContainer()
-    const markFromZoomControl = (event: PointerEvent) => {
-      if (
-        event.shiftKey || (
-          event.target instanceof Element &&
-          event.target.closest('.leaflet-control-zoom-in, .leaflet-control-zoom-out')
-        )
-      ) {
-        markTransientUserInteraction()
-      }
-    }
-    const markFromKeyboard = (event: KeyboardEvent) => {
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', '+', '-', '='].includes(event.key)) {
-        markTransientUserInteraction()
-      }
-    }
-    const markFromTouch = (event: TouchEvent) => {
-      if (event.touches.length >= 2) markTransientUserInteraction()
-    }
-
-    container.addEventListener('wheel', markTransientUserInteraction, { capture: true, passive: true })
-    container.addEventListener('dblclick', markTransientUserInteraction, true)
-    container.addEventListener('pointerdown', markFromZoomControl, true)
-    container.addEventListener('keydown', markFromKeyboard, true)
-    container.addEventListener('touchstart', markFromTouch, { capture: true, passive: true })
-    return () => {
-      container.removeEventListener('wheel', markTransientUserInteraction, true)
-      container.removeEventListener('dblclick', markTransientUserInteraction, true)
-      container.removeEventListener('pointerdown', markFromZoomControl, true)
-      container.removeEventListener('keydown', markFromKeyboard, true)
-      container.removeEventListener('touchstart', markFromTouch, true)
-      clearUserInteractionExpiry()
-    }
-  }, [clearUserInteractionExpiry, map, markTransientUserInteraction])
-
+    const observer = new ResizeObserver(() => map.invalidateSize({ animate: false }))
+    observer.observe(map.getContainer())
+    return () => observer.disconnect()
+  }, [map])
   return null
 }
 
@@ -217,7 +193,7 @@ function FocusMap({
   zoom,
   focusKey,
 }: {
-  point: Point | null
+  point: MapPoint | null
   zoom: number
   focusKey: string | null
 }) {
@@ -269,6 +245,67 @@ function FitStationRadius({
   return null
 }
 
+// 넓은 지도에서는 전체 검색 결과를 시군구 이름과 건수로 묶어 표시한다.
+function RegionClusterMarker({ cluster }: { cluster: GeographicMapCluster }) {
+  const map = useMap()
+  const label = [cluster.province, cluster.sigungu].filter(Boolean).join(' ') || '지역 미상'
+  const count = cluster.count.toLocaleString('ko-KR')
+  const clusterIcon = useMemo(() => {
+    // 서버 지역명은 HTML로 해석하지 않고 텍스트 노드로 표시한다.
+    const content = document.createElement('span')
+    content.className = 'map-region-cluster-content'
+    content.setAttribute('aria-hidden', 'true')
+    const name = document.createElement('span')
+    name.className = 'map-region-cluster-name'
+    name.textContent = cluster.sigungu || cluster.province || '지역 미상'
+    const amount = document.createElement('strong')
+    amount.textContent = `${count}건`
+    content.append(name, amount)
+    return divIcon({
+      className: 'map-region-cluster',
+      html: content,
+      iconSize: [88, 54],
+      iconAnchor: [44, 27],
+    })
+  }, [cluster.province, cluster.sigungu, count])
+
+  const expandCluster = () => {
+    const previousZoom = map.getZoom()
+    const { west, south, east, north } = cluster.bounds
+    map.stop()
+    if (west === east && south === north) {
+      map.setView([cluster.latitude, cluster.longitude], Math.max(12, previousZoom + 2))
+    } else {
+      map.fitBounds([[south, west], [north, east]], { padding: [48, 48], maxZoom: 14, animate: false })
+      if (map.getZoom() <= previousZoom) {
+        map.setView([cluster.latitude, cluster.longitude], previousZoom + 1, { animate: false })
+      }
+    }
+  }
+
+  return (
+    <Marker
+      icon={clusterIcon}
+      position={[cluster.latitude, cluster.longitude]}
+      title={`${label} ${count}건, 확대`}
+      alt={`${label} ${count}건, 확대`}
+      autoPanOnFocus={false}
+      eventHandlers={{
+        click: expandCluster,
+        keydown: (event) => {
+          // 팝업 없는 Leaflet 마커에는 Enter 동작이 없어 직접 키보드 선택을 연결한다.
+          const key = event.originalEvent
+          if (!key.repeat && (key.key === 'Enter' || key.key === ' ')) {
+            key.preventDefault()
+            key.stopPropagation()
+            expandCluster()
+          }
+        },
+      }}
+    />
+  )
+}
+
 function AuctionMarker({
   item,
   itemKey,
@@ -277,7 +314,7 @@ function AuctionMarker({
   keyboardEnabled,
   onSelect,
 }: {
-  item: GeographicSearchItem & Point
+  item: GeographicSearchItem & MapPoint
   itemKey: string
   selected: boolean
   autoPanOnSelect: boolean
@@ -323,6 +360,7 @@ function AuctionMarker({
 
 export default function AuctionMap({
   items,
+  clusters = null,
   mode = 'interactive',
   selectedGoodsId = null,
   selectedItemKey = null,
@@ -331,13 +369,17 @@ export default function AuctionMap({
   radiusM = 0,
   viewportTarget = null,
   viewportZoomSnap = 1,
+  minZoom,
   onViewportTargetApplied,
   onBoundsChange,
+  onViewportChangeStart,
   onUserBoundsChange,
   onSelectGoods,
   onSelectItem,
   className = 'h-[560px]',
+  fillContainer = false,
 }: AuctionMapProps) {
+  const applyingViewport = useRef(false)
   const isStationRadiusPreview = mode === 'station-radius-preview'
   const mappedItems = useMemo(() => items.filter(hasCoordinates), [items])
   const legacySelectedItem = selectedGoodsId === null
@@ -367,10 +409,12 @@ export default function AuctionMap({
         ? `${station.name} 역세권 지도`
         : isStationRadiusPreview ? '역세권 반경 미리보기 지도' : '경매물건 지도'}
       data-map-mode={mode}
+      className={fillContainer ? 'h-full min-h-0' : undefined}
     >
       <MapContainer
         center={station ? [station.latitude, station.longitude] : DEFAULT_CENTER}
         zoom={station ? 14 : 8}
+        minZoom={minZoom}
         zoomSnap={viewportZoomSnap}
         zoomControl={!isStationRadiusPreview}
         scrollWheelZoom={!isStationRadiusPreview}
@@ -381,17 +425,20 @@ export default function AuctionMap({
         dragging={!isStationRadiusPreview}
         attributionControl={false}
         className={`w-full bg-slate-100 ${className}`}
-        style={{ minHeight: isStationRadiusPreview ? '420px' : '520px' }}
+        style={{ minHeight: fillContainer ? 0 : isStationRadiusPreview ? '420px' : '520px' }}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <AttributionControl prefix={false} />
+        {fillContainer && <MapSizeObserver />}
         {onBoundsChange && (
           <ViewportObserver
             onBoundsChange={onBoundsChange}
+            onViewportChangeStart={onViewportChangeStart}
             onUserBoundsChange={onUserBoundsChange}
+            applyingViewport={applyingViewport}
           />
         )}
         <FitStationRadius
@@ -403,6 +450,7 @@ export default function AuctionMap({
           target={viewportTarget}
           enabled={selectedItem === null && station === null}
           onApplied={onViewportTargetApplied}
+          applyingViewport={applyingViewport}
         />
         <FocusMap
           point={focusPoint}
@@ -439,7 +487,9 @@ export default function AuctionMap({
           </>
         )}
 
-        {mappedItems.map((item) => {
+        {clusters?.map((cluster) => <RegionClusterMarker key={cluster.key} cluster={cluster} />)}
+
+        {(clusters === null ? mappedItems : selectedItem ? [selectedItem] : []).map((item) => {
           const itemKey = getGeographicSearchItemKey(item)
           return (
             <AuctionMarker

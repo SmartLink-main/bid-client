@@ -3,29 +3,29 @@ import { Link } from 'react-router-dom'
 import {
   ChevronLeft,
   ChevronRight,
-  Filter,
   Loader2,
-  MapPinned,
   MapPin,
   ShieldCheck,
 } from 'lucide-react'
-import AuctionMap from '../components/AuctionMap'
+import AuctionMap, { type MapPoint } from '../components/AuctionMap'
 import Layout from '../components/Layout'
 import {
+  getGeographicSearchItemKey,
   reverseGeographicRegion,
   searchGeographicMapGoods,
   type GeographicBounds,
+  type GeographicMapCluster,
   type GeographicMapSearchParams,
   type GeographicSearchItem,
 } from '../lib/auction-extra'
 import { getKoreanErrorMessage, isNetworkRequestError } from '../lib/api'
 import { getDongOptions } from '../lib/dong-filter-options'
-import { formatMoney, formatNumber, getText } from '../lib/format'
+import { formatAmountInput, formatMoney, formatNumber, getText, optionalAmount } from '../lib/format'
 import { getMapRegionSelectionFromRegion } from '../lib/map-region-selection'
+import { getMapClusterLevel, getMapSearchBounds } from '../lib/map-search-viewport'
 import {
   GOODS_USAGE_VALUES_BY_PROPERTY_TYPE,
   PROPERTY_TYPE_GROUPS,
-  PROVINCE_SEARCH_TERMS,
   REGION_PROVINCES,
   SIGUNGU_BY_PROVINCE,
 } from '../lib/search-filter-options'
@@ -37,21 +37,6 @@ const AUTO_SEARCH_DEBOUNCE_MS = 450
 const CONNECTION_RETRY_DELAYS_MS = [1_000, 3_000, 10_000] as const
 
 type SearchErrorKind = 'validation' | 'request' | 'connection'
-type LocationSelectionSource = 'filter' | 'map'
-
-function optionalAmount(value: string) {
-  if (!value.trim()) return undefined
-  const parsed = Number(value.replaceAll(',', ''))
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : Number.NaN
-}
-
-function formatAmountInput(value: string, currentValue: string) {
-  const digits = value.replaceAll(',', '')
-  if (!/^\d*$/.test(digits)) return currentValue
-  if (!digits) return ''
-  const normalized = digits.replace(/^0+(?=\d)/, '')
-  return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-}
 
 function isSameBounds(
   left: GeographicBounds | null,
@@ -73,7 +58,7 @@ function MapResultCard({
 }: {
   item: GeographicSearchItem
   selected: boolean
-  onSelect: (auctionGoodsId: number) => void
+  onSelect: (itemKey: string) => void
 }) {
   const address = item.printed_address || item.road_address || item.lot_number_address
   const lowestPrice = item.current_lowest_sale_price ?? item.first_announcement_lowest_sale_price
@@ -84,7 +69,7 @@ function MapResultCard({
         selected ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-gray-200 hover:border-indigo-300'
       }`}
     >
-      <button type="button" onClick={() => onSelect(item.auction_goods_id)} className="w-full text-left">
+      <button type="button" onClick={() => onSelect(getGeographicSearchItemKey(item))} className="w-full text-left">
         <div className="flex flex-wrap items-center gap-2 text-xs font-extrabold text-indigo-700">
           <span>{getText(item.court_name)}</span>
           {item.branch_name && <span className="text-gray-400">{item.branch_name}</span>}
@@ -117,16 +102,18 @@ export default function MapSearchPage() {
   const [selectedProvince, setSelectedProvince] = useState('')
   const [selectedSigungu, setSelectedSigungu] = useState('')
   const [selectedDong, setSelectedDong] = useState('')
-  const [locationSelectionSource, setLocationSelectionSource] = useState<LocationSelectionSource>('filter')
   const [selectedPropertyType, setSelectedPropertyType] = useState('')
   const [minPrice, setMinPrice] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
   const [viewportBounds, setViewportBounds] = useState<GeographicBounds | null>(null)
+  const [viewportZoom, setViewportZoom] = useState(8)
   const [appliedParams, setAppliedParams] = useState<GeographicMapSearchParams | null>(null)
   const [items, setItems] = useState<GeographicSearchItem[]>([])
+  const [clusters, setClusters] = useState<GeographicMapCluster[] | null>(null)
   const [total, setTotal] = useState(0)
   const [excludedCount, setExcludedCount] = useState(0)
-  const [selectedGoodsId, setSelectedGoodsId] = useState<number | null>(null)
+  const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null)
+  const [isMapMoving, setIsMapMoving] = useState(false)
   const [isViewportDirty, setIsViewportDirty] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -140,22 +127,34 @@ export default function MapSearchPage() {
   const requestGenerationRef = useRef(0)
   const appliedParamsGenerationRef = useRef(-1)
   const viewportBoundsRef = useRef<GeographicBounds | null>(null)
+  const viewportZoomRef = useRef(8)
   const reverseRegionGenerationRef = useRef(0)
   const reverseRegionAbortRef = useRef<AbortController | null>(null)
+  const searchAbortRef = useRef<AbortController | null>(null)
+  const regionFocusRevisionRef = useRef(0)
 
   const markSearchDirty = useCallback(() => {
     requestGenerationRef.current += 1
-    setSelectedGoodsId(null)
+    searchAbortRef.current?.abort()
+    setSelectedItemKey(null)
+    setItems([])
+    setClusters(null)
+    setTotal(0)
+    setExcludedCount(0)
+    setIsLoading(false)
     setIsViewportDirty(true)
     setErrorMessage('')
     setSearchErrorKind(null)
     setConnectionFailureCount(0)
   }, [])
 
-  const handleBoundsChange = useCallback((bounds: GeographicBounds) => {
-    if (isSameBounds(viewportBoundsRef.current, bounds)) return
+  const handleBoundsChange = useCallback((bounds: GeographicBounds, zoom: number) => {
+    setIsMapMoving(false)
+    if (isSameBounds(viewportBoundsRef.current, bounds) && viewportZoomRef.current === zoom) return
     viewportBoundsRef.current = bounds
+    viewportZoomRef.current = zoom
     setViewportBounds(bounds)
+    setViewportZoom(zoom)
     markSearchDirty()
   }, [markSearchDirty])
 
@@ -166,7 +165,13 @@ export default function MapSearchPage() {
     setIsResolvingMapRegion(false)
   }, [])
 
-  const handleUserBoundsChange = useCallback((bounds: GeographicBounds) => {
+  const handleViewportChangeStart = useCallback(() => {
+    cancelReverseRegionLookup()
+    markSearchDirty()
+    setIsMapMoving(true)
+  }, [cancelReverseRegionLookup, markSearchDirty])
+
+  const handleUserBoundsChange = useCallback((_bounds: GeographicBounds, center: MapPoint) => {
     reverseRegionGenerationRef.current += 1
     const requestGeneration = reverseRegionGenerationRef.current
     reverseRegionAbortRef.current?.abort()
@@ -174,13 +179,11 @@ export default function MapSearchPage() {
     reverseRegionAbortRef.current = controller
 
     setIsResolvingMapRegion(true)
-    setLocationSelectionSource('map')
     setRegionFocusKey(null)
     setPendingViewportKey(null)
     setMapFocusMessage('지도 중심의 소재지를 확인합니다.')
 
-    const longitude = (bounds.west + bounds.east) / 2
-    const latitude = (bounds.south + bounds.north) / 2
+    const { longitude, latitude } = center
     reverseGeographicRegion(longitude, latitude, controller.signal)
       .then((response) => {
         if (
@@ -238,9 +241,10 @@ export default function MapSearchPage() {
     ) return
     const controller = new AbortController()
     const requestGeneration = appliedParamsGenerationRef.current
+    searchAbortRef.current = controller
     let isActive = true
     queueMicrotask(() => {
-      if (isActive) {
+      if (isActive && requestGeneration === requestGenerationRef.current) {
         setIsLoading(true)
       }
     })
@@ -249,9 +253,10 @@ export default function MapSearchPage() {
       .then((response) => {
         if (!isActive || requestGeneration !== requestGenerationRef.current) return
         setItems(response.items)
+        setClusters(appliedParams.cluster_by ? response.clusters ?? null : null)
         setTotal(response.total)
         setExcludedCount(response.coverage.excluded_unconvertible)
-        setSelectedGoodsId(null)
+        setSelectedItemKey(null)
         setIsViewportDirty(false)
         setErrorMessage('')
         setSearchErrorKind(null)
@@ -264,6 +269,7 @@ export default function MapSearchPage() {
           requestGeneration !== requestGenerationRef.current
         ) return
         setItems([])
+        setClusters(null)
         setTotal(0)
         setExcludedCount(0)
         if (isNetworkRequestError(error)) {
@@ -277,12 +283,13 @@ export default function MapSearchPage() {
         setConnectionFailureCount(0)
       })
       .finally(() => {
-        if (isActive) setIsLoading(false)
+        if (isActive && requestGeneration === requestGenerationRef.current) setIsLoading(false)
       })
 
     return () => {
       isActive = false
       controller.abort()
+      if (searchAbortRef.current === controller) searchAbortRef.current = null
     }
   }, [appliedParams, connectionRetryRevision])
 
@@ -339,7 +346,7 @@ export default function MapSearchPage() {
   ])
 
   useEffect(() => {
-    if (pendingViewportKey || isResolvingMapRegion || !viewportBounds) return
+    if (pendingViewportKey || isMapMoving || !viewportBounds) return
 
     const timer = window.setTimeout(() => {
       const parsedMinPrice = optionalAmount(minPrice)
@@ -364,18 +371,17 @@ export default function MapSearchPage() {
       setErrorMessage('')
       setSearchErrorKind(null)
       setConnectionFailureCount(0)
+      const searchBounds = getMapSearchBounds(viewportBounds)
+      if (!searchBounds) {
+        appliedParamsGenerationRef.current = -1
+        setAppliedParams(null)
+        setIsViewportDirty(false)
+        return
+      }
       appliedParamsGenerationRef.current = requestGenerationRef.current
       setAppliedParams({
-        ...viewportBounds,
-        sido: locationSelectionSource === 'filter' && selectedProvince
-          ? PROVINCE_SEARCH_TERMS[selectedProvince]
-          : undefined,
-        sigungu: locationSelectionSource === 'filter' && selectedSigungu
-          ? selectedSigungu
-          : undefined,
-        dong: locationSelectionSource === 'filter' && selectedDong
-          ? selectedDong
-          : undefined,
+        ...searchBounds,
+        cluster_by: getMapClusterLevel(viewportBounds, viewportZoom),
         goods_usage: selectedPropertyType
           ? GOODS_USAGE_VALUES_BY_PROPERTY_TYPE[selectedPropertyType]
           : undefined,
@@ -388,36 +394,36 @@ export default function MapSearchPage() {
 
     return () => window.clearTimeout(timer)
   }, [
-    isResolvingMapRegion,
-    locationSelectionSource,
+    isMapMoving,
     maxPrice,
     minPrice,
     pendingViewportKey,
-    selectedDong,
     selectedPropertyType,
-    selectedProvince,
-    selectedSigungu,
     viewportBounds,
+    viewportZoom,
   ])
 
   const handleViewportTargetApplied = useCallback((key: string) => {
     setPendingViewportKey((current) => current === key ? null : current)
-    if (key === 'region:korea') {
+    const [, province, sigungu, dong] = key.split(':')
+    if (province === 'korea') {
       setMapFocusMessage('전국 지도로 이동이 완료되었습니다.')
       return
     }
-    const [, province, sigungu, dong] = key.split(':')
     const regionLabel = dong && dong !== 'all'
       ? `${province} ${sigungu} ${dong}`
       : sigungu === 'all' ? province : `${province} ${sigungu}`
     setMapFocusMessage(`${regionLabel} 지역으로 지도 이동이 완료되었습니다.`)
   }, [])
 
+  const createRegionFocusKey = (province = '', sigungu = '', dong = '') => (
+    ['region', province || 'korea', sigungu || 'all', dong || 'all', ++regionFocusRevisionRef.current].join(':')
+  )
+
   const selectProvince = (province: string) => {
-    const focusKey = province ? `region:${province}:all` : 'region:korea'
+    const focusKey = createRegionFocusKey(province)
     cancelReverseRegionLookup()
     markSearchDirty()
-    setLocationSelectionSource('filter')
     setSelectedProvince(province)
     setSelectedSigungu('')
     setSelectedDong('')
@@ -429,10 +435,9 @@ export default function MapSearchPage() {
   }
 
   const selectSigungu = (sigungu: string) => {
-    const focusKey = `region:${selectedProvince}:${sigungu || 'all'}:all`
+    const focusKey = createRegionFocusKey(selectedProvince, sigungu)
     cancelReverseRegionLookup()
     markSearchDirty()
-    setLocationSelectionSource('filter')
     setSelectedSigungu(sigungu)
     setSelectedDong('')
     setRegionFocusKey(focusKey)
@@ -443,10 +448,9 @@ export default function MapSearchPage() {
   }
 
   const selectDong = (dong: string) => {
-    const focusKey = `region:${selectedProvince}:${selectedSigungu}:${dong || 'all'}`
+    const focusKey = createRegionFocusKey(selectedProvince, selectedSigungu, dong)
     cancelReverseRegionLookup()
     markSearchDirty()
-    setLocationSelectionSource('filter')
     setSelectedDong(dong)
     setRegionFocusKey(focusKey)
     setPendingViewportKey(focusKey)
@@ -456,133 +460,58 @@ export default function MapSearchPage() {
   }
 
   const resetSelectionFilters = () => {
+    const focusKey = createRegionFocusKey()
     cancelReverseRegionLookup()
     markSearchDirty()
-    setLocationSelectionSource('filter')
     setSelectedProvince('')
     setSelectedSigungu('')
     setSelectedDong('')
     setSelectedPropertyType('')
     setMinPrice('')
     setMaxPrice('')
-    setRegionFocusKey('region:korea')
-    setPendingViewportKey('region:korea')
+    setRegionFocusKey(focusKey)
+    setPendingViewportKey(focusKey)
     setMapFocusMessage('선택 조건을 초기화하고 전국 지도로 이동합니다.')
   }
 
   const currentOffset = appliedParams?.offset ?? 0
+  const clusterLabel = appliedParams?.cluster_by === 'sido' ? '시·도' : '시·군·구'
+  const isSearchPending = isLoading || (isViewportDirty && !errorMessage)
   const movePage = (offset: number) => {
     setAppliedParams((current) => current ? { ...current, offset: Math.max(0, offset) } : current)
   }
 
   return (
-    <Layout>
-      <div className="w-full flex-grow bg-slate-50 px-4 py-6">
-        <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="mb-2 w-fit rounded-full bg-blue-100 px-3 py-1 text-[11px] font-extrabold text-blue-700">현재 지도 화면 기준 · 자동검색</p>
-              <h1 className="flex items-center gap-2 text-2xl font-extrabold text-slate-900"><MapPinned className="h-6 w-6 text-blue-600" /> 지도 영역 경매물건 찾기</h1>
-              <p className="mt-1 text-sm text-gray-500">지도를 움직이면 현재 화면 안의 물건을 자동으로 검색하고 마커와 목록을 함께 비교합니다.</p>
-            </div>
-            <Link
-              to="/data-licenses"
-              aria-label="지도 및 행정구역 데이터 출처와 이용조건 보기"
-              className="inline-flex w-fit shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-4 py-2 text-xs font-bold text-gray-600 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-slate-50 hover:text-blue-700"
-            >
-              <ShieldCheck className="h-4 w-4 text-blue-600" aria-hidden="true" />
-              <span>지도·데이터 출처</span>
-              <span className="hidden text-gray-400 sm:inline">OSM · 국토부 VWorld</span>
-            </Link>
-          </div>
-
-          <div className="min-w-0 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(180px,0.7fr)_minmax(320px,1.3fr)]">
-              <label className="min-w-0 rounded-xl border border-gray-200 bg-slate-50/70 p-3">
-                <span className="mb-1 block text-xs font-extrabold text-slate-600">물건종류</span>
-                <select
-                  aria-label="물건종류"
-                  value={selectedPropertyType}
-                  onChange={(event) => {
-                    markSearchDirty()
-                    setSelectedPropertyType(event.target.value)
-                  }}
-                  className="w-full min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500"
-                >
-                  <option value="">전체</option>
-                  {PROPERTY_TYPE_GROUPS.map((group) => (
-                    <optgroup key={group.id} label={group.title}>
-                      {group.items.map((item) => <option key={item} value={item}>{item}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-              </label>
-              <fieldset className="min-w-0 rounded-xl border border-gray-200 bg-slate-50/70 p-3" aria-label="최저가 범위">
-                <legend className="px-1 text-xs font-extrabold text-slate-600">최저가 범위</legend>
-                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center rounded-xl border border-gray-200 bg-white focus-within:border-indigo-500">
-                  <input inputMode="numeric" value={minPrice} onChange={(event) => {
-                    const nextValue = formatAmountInput(event.target.value, minPrice)
-                    if (nextValue === minPrice) return
-                    markSearchDirty()
-                    setMinPrice(nextValue)
-                  }} placeholder="최소 가격" aria-label="최저가 최소" className="w-full min-w-0 rounded-l-xl border-0 bg-transparent px-3 py-2.5 text-sm outline-none" />
-                  <span className="px-1 text-sm font-extrabold text-slate-400" aria-hidden="true">~</span>
-                  <input inputMode="numeric" value={maxPrice} onChange={(event) => {
-                    const nextValue = formatAmountInput(event.target.value, maxPrice)
-                    if (nextValue === maxPrice) return
-                    markSearchDirty()
-                    setMaxPrice(nextValue)
-                  }} placeholder="최대 가격" aria-label="최저가 최대" className="w-full min-w-0 rounded-r-xl border-0 bg-transparent px-3 py-2.5 text-sm outline-none" />
-                </div>
-              </fieldset>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <p className="flex items-center gap-2 text-xs text-gray-500"><Filter className="h-4 w-4" /> 지도 이동과 조건 변경이 끝나면 현재 화면의 물건을 자동으로 검색합니다.</p>
-                <button type="button" onClick={resetSelectionFilters} disabled={!selectedProvince && !selectedPropertyType && !minPrice && !maxPrice} className="text-xs font-extrabold text-indigo-600 hover:text-indigo-800 disabled:cursor-not-allowed disabled:text-gray-300">조건 초기화</button>
-              </div>
-              <span className="text-xs font-extrabold text-indigo-600" aria-live="polite">
-                {pendingViewportKey
-                  ? '지도 이동 중'
-                  : isResolvingMapRegion
-                    ? '지도 중심 소재지 확인 중'
-                    : searchErrorKind === 'connection'
-                    ? '지도 검색 서비스에 다시 연결 중'
-                  : isLoading
-                    ? '현재 지도 자동 검색 중'
-                    : searchErrorKind === 'validation'
-                      ? '자동 검색 조건을 확인해 주세요'
-                    : searchErrorKind === 'request'
-                      ? '자동 검색을 완료하지 못했습니다'
-                    : isViewportDirty
-                      ? '자동 검색 준비 중'
-                      : '현재 지도 자동 검색 완료'}
-              </span>
-            </div>
-          </div>
-
-          {errorMessage && <div className="rounded-xl border border-red-100 bg-red-50 px-5 py-4 text-sm font-bold text-red-700" role="alert">{errorMessage}</div>}
-
-          <div className="grid min-h-[680px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm xl:grid-cols-[minmax(0,1.55fr)_minmax(360px,0.8fr)]">
-            <div className="relative min-h-[520px] overflow-hidden border-b border-gray-200 xl:border-b-0 xl:border-r">
+    <Layout fullHeight>
+      <div className="flex min-h-0 w-full flex-1 flex-col bg-slate-50 p-2 md:p-3">
+        <div className="flex min-h-0 w-full flex-1 flex-col gap-2">
+          <h1 className="sr-only">지도 영역 경매물건 찾기</h1>
+          <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1.5fr)_minmax(min(50%,280px),1fr)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm md:grid-cols-[minmax(0,1fr)_320px] md:grid-rows-1 xl:grid-cols-[minmax(0,1fr)_400px]">
+            <div className="relative min-h-0 min-w-0 overflow-hidden border-b border-gray-200 md:border-b-0 md:border-r">
               <AuctionMap
                 items={items}
-                selectedGoodsId={selectedGoodsId}
+                clusters={clusters}
+                selectedItemKey={selectedItemKey}
                 focusSelectedItem={false}
                 viewportTarget={regionViewportTarget}
                 viewportZoomSnap={0.1}
+                minZoom={6}
                 onViewportTargetApplied={handleViewportTargetApplied}
-                onSelectGoods={setSelectedGoodsId}
+                onSelectItem={setSelectedItemKey}
+                onViewportChangeStart={handleViewportChangeStart}
                 onBoundsChange={handleBoundsChange}
                 onUserBoundsChange={handleUserBoundsChange}
-                className="h-[520px] xl:h-[680px]"
+                className="h-full"
+                fillContainer
               />
+              {errorMessage && <div className="absolute bottom-8 left-3 right-3 z-[900] rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 shadow-sm" role="alert">{errorMessage}</div>}
               <fieldset
                 aria-label="지도 소재지"
                 aria-busy={isResolvingMapRegion}
                 className="absolute left-14 top-3 z-[900] w-[calc(100%-4.5rem)] max-w-xl rounded-xl bg-white/95 p-2 shadow-lg ring-1 ring-gray-200 backdrop-blur"
               >
                 <legend className="sr-only">지도 소재지</legend>
+                <p className="mb-1 text-[10px] font-bold text-slate-500">{isResolvingMapRegion ? '지도 중심 소재지 확인 중' : '지도 중심 지역 · 선택하면 이동'}</p>
                 <div className="grid min-w-0 grid-cols-3 gap-1.5">
                   <label className="min-w-0">
                     <span className="sr-only">시·도</span>
@@ -627,17 +556,87 @@ export default function MapSearchPage() {
               <p className="sr-only" role="status" aria-live="polite">{mapFocusMessage}</p>
             </div>
 
-            <aside className="flex min-h-0 flex-col bg-slate-50/70">
-              <div className="border-b border-gray-200 bg-white px-4 py-4">
+            <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-slate-50/70" aria-label="현재 화면의 물건 목록">
+              <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-2">
                 <div className="flex items-center justify-between gap-3">
-                  <div><div className="text-xs font-bold text-gray-400">현재 영역</div><div className="mt-1 text-lg font-extrabold text-slate-900">{searchErrorKind === 'connection' ? '연결 확인 중' : formatNumber(total, '개')}</div></div>
-                  {items.length > 0 && <div className="text-right text-xs font-bold text-gray-500"><MapPin className="mr-1 inline h-4 w-4 text-indigo-600" />마커 {mappedCount}개</div>}
+                  <div><div className="text-xs font-bold text-gray-400">현재 영역</div><div className="mt-1 text-lg font-extrabold text-slate-900">{searchErrorKind === 'connection' ? '연결 확인 중' : isSearchPending ? '검색 중' : formatNumber(total, '개')}</div></div>
+                  <div className="flex flex-col items-end gap-1">
+                    <Link
+                      to="/data-licenses"
+                      aria-label="지도 및 행정구역 데이터 출처와 이용조건 보기"
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-500 hover:text-blue-700"
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5 text-blue-600" aria-hidden="true" />
+                      지도·데이터 출처
+                    </Link>
+                    {total > 0 && <div className="text-xs font-bold text-gray-500"><MapPin className="mr-1 inline h-3.5 w-3.5 text-indigo-600" />{clusters ? `${clusterLabel} 묶음 ${clusters.length}개` : `마커 ${mappedCount}개`}</div>}
+                  </div>
+                </div>
+                <div className="mt-2 border-t border-gray-100 pt-2 md:mt-3 md:pt-3">
+                  <div className="grid min-w-0 grid-cols-[minmax(90px,0.65fr)_minmax(0,1.35fr)] gap-2 md:grid-cols-1">
+                    <label className="min-w-0">
+                      <span className="mb-1 block text-xs font-extrabold text-slate-600">물건종류</span>
+                      <select
+                        aria-label="물건종류"
+                        value={selectedPropertyType}
+                        onChange={(event) => {
+                          markSearchDirty()
+                          setSelectedPropertyType(event.target.value)
+                        }}
+                        className="w-full min-w-0 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500"
+                      >
+                        <option value="">전체</option>
+                        {PROPERTY_TYPE_GROUPS.map((group) => (
+                          <optgroup key={group.id} label={group.title}>
+                            {group.items.map((item) => <option key={item} value={item}>{item}</option>)}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </label>
+                    <fieldset className="min-w-0" aria-label="최저가 범위">
+                      <legend className="px-1 text-xs font-extrabold text-slate-600">최저가 범위</legend>
+                      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center rounded-xl border border-gray-200 bg-white focus-within:border-indigo-500">
+                        <input inputMode="numeric" value={minPrice} onChange={(event) => {
+                          const nextValue = formatAmountInput(event.target.value, minPrice)
+                          if (nextValue === minPrice) return
+                          markSearchDirty()
+                          setMinPrice(nextValue)
+                        }} placeholder="최소 가격" aria-label="최저가 최소" className="w-full min-w-0 rounded-l-xl border-0 bg-transparent px-2 py-1.5 text-xs outline-none" />
+                        <span className="px-1 text-sm font-extrabold text-slate-400" aria-hidden="true">~</span>
+                        <input inputMode="numeric" value={maxPrice} onChange={(event) => {
+                          const nextValue = formatAmountInput(event.target.value, maxPrice)
+                          if (nextValue === maxPrice) return
+                          markSearchDirty()
+                          setMaxPrice(nextValue)
+                        }} placeholder="최대 가격" aria-label="최저가 최대" className="w-full min-w-0 rounded-r-xl border-0 bg-transparent px-2 py-1.5 text-xs outline-none" />
+                      </div>
+                    </fieldset>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <button type="button" onClick={resetSelectionFilters} disabled={!selectedProvince && !selectedPropertyType && !minPrice && !maxPrice} className="shrink-0 text-xs font-extrabold text-indigo-600 hover:text-indigo-800 disabled:cursor-not-allowed disabled:text-gray-300">조건 초기화</button>
+                    <span className="text-right text-[11px] font-bold text-indigo-600" aria-live="polite">
+                      {pendingViewportKey || isMapMoving
+                        ? '지도 이동 중'
+                        : searchErrorKind === 'connection'
+                          ? '지도 검색 서비스에 다시 연결 중'
+                        : isLoading
+                          ? '현재 지도 자동 검색 중'
+                          : searchErrorKind === 'validation'
+                            ? '자동 검색 조건을 확인해 주세요'
+                          : searchErrorKind === 'request'
+                            ? '자동 검색을 완료하지 못했습니다'
+                          : isViewportDirty
+                            ? '자동 검색 준비 중'
+                            : '현재 지도 자동 검색 완료'}
+                    </span>
+                  </div>
                 </div>
                 {excludedCount > 0 && <p className="mt-2 text-xs text-amber-700">현재 페이지 후보 중 좌표를 변환할 수 없는 {excludedCount}개 물건은 지도·목록에서 제외됐습니다.</p>}
+                {clusters && clusters.length > 0 && <p className="mt-2 text-[11px] text-slate-500">{clusterLabel} 묶음을 누르거나 지도를 확대하면 더 자세히 볼 수 있습니다.</p>}
               </div>
 
-              <div className="flex-1 space-y-3 overflow-y-auto p-3 xl:max-h-[550px]">
-                {isLoading && <div className="flex min-h-52 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-indigo-600" /></div>}
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="region" aria-label="검색 결과 목록" tabIndex={0}>
+                {isSearchPending && <div className="flex min-h-52 items-center justify-center" aria-label="현재 지도 물건 검색 중"><Loader2 className="h-7 w-7 animate-spin text-indigo-600" /></div>}
                 {!isLoading && errorMessage && items.length === 0 && (
                   <div className="rounded-xl border border-dashed border-red-200 bg-white p-8 text-center text-sm text-red-600">
                     {searchErrorKind === 'connection'
@@ -647,16 +646,15 @@ export default function MapSearchPage() {
                         : '검색 결과를 불러오지 못했습니다.'}
                   </div>
                 )}
-                {!isLoading && !errorMessage && appliedParams && items.length === 0 && <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">현재 지도와 조건에 맞는 물건이 없습니다.</div>}
-                {!isLoading && !appliedParams && <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center"><MapPin className="mx-auto h-7 w-7 text-gray-300" /><p className="mt-3 text-sm font-bold text-gray-600">현재 지도 범위의 물건을 자동으로 검색할 준비를 하고 있습니다.</p></div>}
-                {!isLoading && items.map((item) => <MapResultCard key={item.auction_goods_id} item={item} selected={item.auction_goods_id === selectedGoodsId} onSelect={setSelectedGoodsId} />)}
+                {!isSearchPending && !errorMessage && viewportBounds && items.length === 0 && <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">현재 지도와 조건에 맞는 물건이 없습니다.</div>}
+                {!isSearchPending && items.map((item) => <MapResultCard key={getGeographicSearchItemKey(item)} item={item} selected={getGeographicSearchItemKey(item) === selectedItemKey} onSelect={setSelectedItemKey} />)}
               </div>
 
               {!isLoading && total > PAGE_SIZE && (
-                <div className="flex items-center justify-center gap-3 border-t border-gray-200 bg-white p-3">
-                  <button type="button" onClick={() => movePage(currentOffset - PAGE_SIZE)} disabled={isViewportDirty || currentOffset === 0} className="rounded-lg border border-gray-200 p-2 disabled:text-gray-300" aria-label="이전 페이지"><ChevronLeft className="h-5 w-5" /></button>
+                <div className="flex shrink-0 items-center justify-center gap-3 border-t border-gray-200 bg-white p-1.5 md:p-3">
+                  <button type="button" onClick={() => movePage(currentOffset - PAGE_SIZE)} disabled={isViewportDirty || currentOffset === 0} className="rounded-lg border border-gray-200 p-1.5 disabled:text-gray-300 md:p-2" aria-label="이전 페이지"><ChevronLeft className="h-4 w-4 md:h-5 md:w-5" /></button>
                   <span className="text-xs font-extrabold text-gray-500">{Math.floor(currentOffset / PAGE_SIZE) + 1} / {Math.ceil(total / PAGE_SIZE)}</span>
-                  <button type="button" onClick={() => movePage(currentOffset + PAGE_SIZE)} disabled={isViewportDirty || currentOffset + PAGE_SIZE >= total} className="rounded-lg border border-gray-200 p-2 disabled:text-gray-300" aria-label="다음 페이지"><ChevronRight className="h-5 w-5" /></button>
+                  <button type="button" onClick={() => movePage(currentOffset + PAGE_SIZE)} disabled={isViewportDirty || currentOffset + PAGE_SIZE >= total} className="rounded-lg border border-gray-200 p-1.5 disabled:text-gray-300 md:p-2" aria-label="다음 페이지"><ChevronRight className="h-4 w-4 md:h-5 md:w-5" /></button>
                 </div>
               )}
             </aside>

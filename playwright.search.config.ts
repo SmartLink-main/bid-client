@@ -79,7 +79,7 @@ const webServer: NonNullable<PlaywrightTestConfig['webServer']> = [
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: 'question-search.e2e.ts',
+  testMatch: ['question-search.e2e.ts', 'active-auction-search.e2e.ts'],
   outputDir: 'test-results/playwright-search',
   fullyParallel: false,
   workers: 1,

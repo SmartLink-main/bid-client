@@ -1,35 +1,40 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { lazy, Suspense, type ReactNode, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Routes, Route, useLocation } from 'react-router-dom';
 import MainPage from './pages/MainPage';
-import LoginPage from './pages/LoginPage';
-import SignupPage from './pages/SignupPage';
-import KnowledgePage from './pages/KnowledgePage'; 
-import CourtSearchPage from './pages/CourtSearchPage';
-import RegionSearchPage from './pages/RegionSearchPage';
-import PropertyTypeSearchPage from './pages/PropertyTypeSearchPage';// 1. 새로 만든 페이지 불러오기
-import SearchResultsPage from './pages/SearchResultsPage';
-import GoodsDetailPage from './pages/GoodsDetailPage';
-import SpecialSearchPage from './pages/SpecialSearchPage';
-import AdvancedSearchPage from './pages/AdvancedSearchPage';
-import MapSearchPage from './pages/MapSearchPage';
-import SubwaySearchPage from './pages/SubwaySearchPage';
-import NplSearchPage from './pages/NplSearchPage';
-import ScheduledSearchPage from './pages/ScheduledSearchPage';
-import SchedulePage from './pages/SchedulePage';
-import AuctionScheduleDetailPage from './pages/AuctionScheduleDetailPage';
-import QuestionGoodsPage from './pages/QuestionGoodsPage';
-import AccountPage from './pages/AccountPage';
-import AdminUsersPage from './pages/AdminUsersPage';
-import AdminInquiriesPage from './pages/AdminInquiriesPage';
-import SupportPage from './pages/SupportPage';
-import SystemStatusPage from './pages/SystemStatusPage';
-import FavoritesPage from './pages/FavoritesPage';
-import KakaoAuthCallbackPage from './pages/KakaoAuthCallbackPage';
-import DataLicensesPage from './pages/DataLicensesPage';
-import { PrivacyPolicyPage, ServiceTermsPage } from './pages/LegalPolicyPage';
 import { useAuthSession } from './hooks/useAuthSession';
 import { initializeAuthSession } from './lib/api';
 import { getSafeInternalReturnTo } from './lib/navigation';
+
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const SignupPage = lazy(() => import('./pages/SignupPage'));
+const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
+const CourtSearchPage = lazy(() => import('./pages/CourtSearchPage'));
+const RegionSearchPage = lazy(() => import('./pages/RegionSearchPage'));
+const PropertyTypeSearchPage = lazy(() => import('./pages/PropertyTypeSearchPage'));
+const SearchResultsPage = lazy(() => import('./pages/SearchResultsPage'));
+const GoodsDetailPage = lazy(() => import('./pages/GoodsDetailPage'));
+const SpecialSearchPage = lazy(() => import('./pages/SpecialSearchPage'));
+const AdvancedSearchPage = lazy(() => import('./pages/AdvancedSearchPage'));
+const MapSearchPage = lazy(() => import('./pages/MapSearchPage'));
+const SubwaySearchPage = lazy(() => import('./pages/SubwaySearchPage'));
+const ScheduledSearchPage = lazy(() => import('./pages/ScheduledSearchPage'));
+const SchedulePage = lazy(() => import('./pages/SchedulePage'));
+const AuctionScheduleDetailPage = lazy(() => import('./pages/AuctionScheduleDetailPage'));
+const QuestionGoodsPage = lazy(() => import('./pages/QuestionGoodsPage'));
+const AccountPage = lazy(() => import('./pages/AccountPage'));
+const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage'));
+const AdminInquiriesPage = lazy(() => import('./pages/AdminInquiriesPage'));
+const SupportPage = lazy(() => import('./pages/SupportPage'));
+const SystemStatusPage = lazy(() => import('./pages/SystemStatusPage'));
+const FavoritesPage = lazy(() => import('./pages/FavoritesPage'));
+const KakaoAuthCallbackPage = lazy(() => import('./pages/KakaoAuthCallbackPage'));
+const DataLicensesPage = lazy(() => import('./pages/DataLicensesPage'));
+const PrivacyPolicyPage = lazy(() =>
+  import('./pages/LegalPolicyPage').then((module) => ({ default: module.PrivacyPolicyPage })),
+);
+const ServiceTermsPage = lazy(() =>
+  import('./pages/LegalPolicyPage').then((module) => ({ default: module.ServiceTermsPage })),
+);
 
 function PublicOnlyRoute({
   children,
@@ -98,7 +103,14 @@ function AppRoutes() {
   }, [shouldInitializeSession]);
 
   return (
-    <Routes>
+    <Suspense
+      fallback={(
+        <div className="min-h-screen flex items-center justify-center text-sm text-gray-500" role="status">
+          화면을 불러오고 있습니다.
+        </div>
+      )}
+    >
+      <Routes>
       <Route path="/" element={<MainPage />} />
       <Route path="/login" element={<PublicOnlyRoute><LoginPage /></PublicOnlyRoute>} />
       <Route path="/signup" element={<PublicOnlyRoute><SignupPage /></PublicOnlyRoute>} />
@@ -112,7 +124,6 @@ function AppRoutes() {
       <Route path="/advanced-search" element={<AdvancedSearchPage />} />
       <Route path="/map-search" element={<MapSearchPage />} />
       <Route path="/subway-search" element={<SubwaySearchPage />} />
-      <Route path="/npl-search" element={<NplSearchPage />} />
       <Route path="/scheduled-search" element={<ScheduledSearchPage />} />
       <Route path="/schedules" element={<SchedulePage />} />
       <Route path="/schedules/:scheduleId" element={<AuctionScheduleDetailPage />} />
@@ -169,8 +180,9 @@ function AppRoutes() {
           </AuthenticatedRoute>
         )}
       />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 

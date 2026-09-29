@@ -1,4 +1,4 @@
-import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ChevronLeft,
@@ -6,11 +6,11 @@ import {
   Loader2,
   LockKeyhole,
   MapPin,
-  Search,
   TrainFront,
 } from 'lucide-react'
 import AuctionMap from '../components/AuctionMap'
 import Layout from '../components/Layout'
+import AutoSearchForm from '../components/AutoSearchForm'
 import {
   getSubwayStationFacets,
   getGeographicSearchItemKey,
@@ -22,7 +22,7 @@ import {
   type SubwayStationCityFacet,
 } from '../lib/auction-extra'
 import { getKoreanErrorMessage } from '../lib/api'
-import { formatMoney, formatNumber, getText } from '../lib/format'
+import { formatAmountInput, formatMoney, formatNumber, getText, optionalAmount } from '../lib/format'
 import {
   GOODS_USAGE_VALUES_BY_PROPERTY_TYPE,
   PROPERTY_TYPE_GROUPS,
@@ -31,20 +31,6 @@ import {
 const PAGE_SIZE = 100
 const DEFAULT_RADIUS_M = 500
 const RADIUS_OPTIONS = [300, 500, 1000] as const
-
-function optionalAmount(value: string) {
-  if (!value.trim()) return undefined
-  const parsed = Number(value.replaceAll(',', ''))
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : Number.NaN
-}
-
-function formatAmountInput(value: string, currentValue: string) {
-  const digits = value.replaceAll(',', '')
-  if (!/^\d*$/.test(digits)) return currentValue
-  if (!digits) return ''
-  const normalized = digits.replace(/^0+(?=\d)/, '')
-  return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-}
 
 function SubwayResultCard({
   item,
@@ -331,10 +317,18 @@ export default function SubwaySearchPage() {
     }
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleSearch = () => {
+    if (!selectedStation) return
     const params = buildParams(0)
-    if (params) setAppliedParams(params)
+    // Invalidate any previous response even when the new price range is invalid.
+    searchRequestVersion.current += 1
+    setAppliedParams(params)
+    setItems([])
+    setTotal(0)
+    setExcludedCount(0)
+    setSelectedItemKey(null)
+    setResponseStation(null)
+    setIsLoading(Boolean(params))
   }
 
   const movePage = (offset: number) => {
@@ -351,13 +345,13 @@ export default function SubwaySearchPage() {
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 sm:px-6 md:px-10">
           <section className="flex flex-col gap-3 px-4 py-1 sm:px-6 lg:flex-row lg:items-end lg:justify-between lg:px-8" aria-labelledby="subway-search-heading">
             <div className="text-left">
-              <p className="mb-2 w-fit rounded-full bg-indigo-100 px-3 py-1 text-[11px] font-extrabold text-indigo-700">선택한 역 중심 직선거리 기준 · 버튼 검색</p>
+              <p className="mb-2 w-fit rounded-full bg-indigo-100 px-3 py-1 text-[11px] font-extrabold text-indigo-700">선택한 역 중심 직선거리 기준 · 자동 검색</p>
               <h1 id="subway-search-heading" className="flex items-center gap-2 text-2xl font-extrabold text-slate-900"><TrainFront className="h-6 w-6 text-indigo-600" /> 역세권 경매물건 찾기</h1>
               <p className="mt-1 max-w-2xl text-sm text-gray-500">역을 선택하고 지정한 직선거리 반경 안의 물건을 지도와 거리순 목록으로 비교하세요.</p>
             </div>
           </section>
 
-          <form onSubmit={handleSubmit} className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+          <AutoSearchForm onSearch={handleSearch} className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70">
               <div className="flex flex-col gap-2 border-b border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
                 <div>
@@ -490,7 +484,7 @@ export default function SubwaySearchPage() {
               <legend className="text-xs font-bold text-gray-500">검색 반경</legend>
               <div className="mt-2 flex flex-wrap gap-2">
                 {RADIUS_OPTIONS.map((option) => (
-                  <button key={option} type="button" aria-pressed={radiusM === option} onClick={() => selectRadius(option)} className={`rounded-full px-4 py-2 text-xs font-extrabold transition ${radiusM === option ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-indigo-50'}`}>
+                  <button key={option} type="button" data-auto-search aria-pressed={radiusM === option} onClick={() => selectRadius(option)} className={`rounded-full px-4 py-2 text-xs font-extrabold transition ${radiusM === option ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-indigo-50'}`}>
                     {option < 1000 ? `${option}m` : `${option / 1000}km`}
                   </button>
                 ))}
@@ -519,12 +513,10 @@ export default function SubwaySearchPage() {
               </fieldset>
             </div>
             <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-xs text-gray-500">선택한 역의 공식 좌표를 중심으로 직선거리 반경을 적용합니다.</p>
-              <button type="submit" disabled={!selectedStation || isLoading} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-extrabold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-300">
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} 반경 안 물건 찾기
-              </button>
+              <p className="text-xs text-gray-500">역·반경·용도를 선택하면 바로 검색합니다. 가격은 입력을 마치면 자동 반영됩니다.</p>
+
             </div>
-          </form>
+          </AutoSearchForm>
 
           {errorMessage && <div className="rounded-xl border border-red-100 bg-red-50 px-5 py-4 text-sm font-bold text-red-700" role="alert">{errorMessage}</div>}
 
@@ -552,7 +544,7 @@ export default function SubwaySearchPage() {
               <div className="flex-1 space-y-3 overflow-y-auto p-3 xl:max-h-[550px]">
                 {isLoading && <div className="flex min-h-52 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-indigo-600" /></div>}
                 {!isLoading && !errorMessage && appliedParams && items.length === 0 && <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">선택한 역과 반경에 조건을 만족하는 물건이 없습니다.</div>}
-                {!isLoading && !appliedParams && <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center"><TrainFront className="mx-auto h-7 w-7 text-gray-300" /><p className="mt-3 text-sm font-bold text-gray-600">역을 선택한 다음 반경 검색을 시작하세요.</p></div>}
+                {!isLoading && !appliedParams && <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center"><TrainFront className="mx-auto h-7 w-7 text-gray-300" /><p className="mt-3 text-sm font-bold text-gray-600">역을 선택하면 반경 안 물건을 바로 검색합니다.</p></div>}
                 {!isLoading && items.map((item) => {
                   const itemKey = getGeographicSearchItemKey(item)
                   return <SubwayResultCard key={itemKey} item={item} selected={itemKey === selectedItemKey} onSelect={setSelectedItemKey} />
