@@ -1,0 +1,130 @@
+name: Frontend deployment smoke
+
+on:
+  workflow_run:
+    workflows: ['Frontend CI']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: '검증할 main SHA (비우면 최신 main)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    # main에는 짧은 요청만 붙이고 배포 대기는 별도 태그 SHA에서 실행한다.
+    if: >-
+      ${{ github.repository == 'SmartLink-main/bid-client' &&
+      ((github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_sha == github.sha) ||
+       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) }}
+    name: Queue deployment smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Dispatch on independent runner tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha || inputs.expected_sha }}
+        run: |
+          python - <<'PY'
+          import json, os, re, urllib.request
+          repo = os.environ["GITHUB_REPOSITORY"]
+          base = os.environ["GITHUB_API_URL"] + "/repos/" + repo
+          headers = {"Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                     "Accept": "application/vnd.github+json",
+                     "X-GitHub-Api-Version": "2026-03-10"}
+          def api(path, payload=None):
+              data = None if payload is None else json.dumps(payload).encode()
+              request = urllib.request.Request(base + path, data=data, headers=headers,
+                                               method="GET" if data is None else "POST")
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  body = response.read()
+                  return json.loads(body) if body else {}
+          latest = api("/commits/main")["sha"]
+          expected = os.environ.get("EXPECTED_SHA") or latest
+          if not re.fullmatch(r"[0-9a-f]{40}", expected) or expected != latest:
+              raise SystemExit("검증 대상은 현재 main SHA여야 합니다.")
+          tag = api("/git/ref/tags/deployment-smoke-v1")["object"]
+          if tag["type"] != "commit" or tag["sha"] == expected:
+              raise SystemExit("별도 커밋의 lightweight deployment-smoke-v1 태그가 필요합니다.")
+          result = api("/actions/workflows/deployment-smoke.yml/dispatches",
+                       {"ref": "deployment-smoke-v1", "inputs": {"expected_sha": expected}})
+          print("배포 검증 요청:", expected, result.get("html_url", ""))
+          PY
+
+  smoke:
+    if: ${{ github.repository == 'SmartLink-main/bid-client' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/tags/deployment-smoke-v1' }}
+    name: Verify deployed website
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    concurrency:
+      group: deployment-smoke-${{ github.repository }}-${{ github.ref }}
+      cancel-in-progress: true
+    env:
+      DEPLOYMENT_SMOKE_RUN: '1'
+      DEPLOYMENT_API_URL: https://smartlink-bid-api.onrender.com
+      DEPLOYMENT_SITE_URL: https://smartlink-bid-client.onrender.com
+      DEPLOYMENT_WAIT_SECONDS: '1200'
+    steps:
+      - name: Resolve trusted main revision
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          python - <<'PY'
+          import json, os, re, urllib.request
+          headers = {"Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                     "Accept": "application/vnd.github+json",
+                     "X-GitHub-Api-Version": "2026-03-10"}
+          url = os.environ["GITHUB_API_URL"] + "/repos/" + os.environ["GITHUB_REPOSITORY"] + "/commits/main"
+          with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as response:
+              latest = json.load(response)["sha"]
+          expected = os.environ.get("EXPECTED_SHA") or latest
+          if not re.fullmatch(r"[0-9a-f]{40}", expected) or expected != latest or expected == os.environ["GITHUB_SHA"]:
+              raise SystemExit("검증 대상은 실행 태그와 다른 현재 main SHA여야 합니다.")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("sha=" + expected + "\n")
+          PY
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.target.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Chromium
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Test deployed website
+        env:
+          DEPLOYMENT_EXPECTED_SHA: ${{ steps.target.outputs.sha }}
+        run: npx --no-install playwright test --config=playwright.deployment.config.ts --forbid-only
+
+      - name: Preserve deployment reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: frontend-deployment-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            playwright-report/deployment/
+            test-results/playwright-deployment/
+          if-no-files-found: ignore
+          retention-days: 14
+

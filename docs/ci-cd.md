@@ -51,3 +51,60 @@ npx --no-install playwright test --config=playwright.main.config.ts --forbid-onl
 npx --no-install playwright test --config=playwright.sidebar.config.ts --forbid-only
 npx --no-install playwright test --config=playwright.legal.config.ts --forbid-only
 ```
+
+## 실제 배포의 읽기 전용 smoke
+
+`.github/workflows/deployment-smoke.yml`은 main의 **Frontend CI**가 성공한 뒤
+고정 실행 태그 `deployment-smoke-v1`에 배포 검사를 요청한다. main에는 짧은
+`Queue deployment smoke` 작업만 붙고 배포 대기는 태그 SHA에서 실행하므로
+Render의 **After CI Checks Pass**와 배포 후 검사 사이에 순환 대기가 생기지 않는다.
+기본 `GITHUB_TOKEN`만 사용하며 새 secrets는 필요하지 않다.
+
+처음 연결할 때 이 workflow가 들어 있는 PR의 마지막 커밋에 lightweight 태그
+`deployment-smoke-v1`을 만들고 원격에 push한다. PR은 merge commit으로 병합하여
+main과 실행 태그의 SHA를 다르게 유지한다. 실행은 현재 main SHA를 확인하고 해당
+커밋의 테스트를 checkout한다. 오래된 main이나 다른 저장소 실행은 거절한다.
+태그는 브랜치 정리 대상이 아니며 기존 태그를 옮기지 않는다. 실행 workflow 자체를
+바꾸려면 새 태그 버전과 main의 dispatch 대상을 함께 갱신한다.
+
+Actions의 **Frontend deployment smoke → Run workflow → main**에서 수동 재검사가
+가능하다. SHA 입력을 비우면 최신 main을 검사한다. 보고서와 실패 자료는
+`frontend-deployment-*` 아티팩트로 14일 보관한다. 실패는 배포 후 오류로 보고하며
+자동 rollback은 수행하지 않는다.
+
+기본 CI는 격리된 기능 회귀 검사다. 배포 smoke는 Render가 기대한 커밋을 게시한 뒤
+실제 정적 파일·SPA 경로·브라우저와 API의 CORS 연결을 확인하는 별도 검사다.
+`npm run build`는 Vite 빌드 뒤 `dist/deployment.json`에 공개 Git `revision`과
+`source`를 기록한다. Render에서는 `RENDER_GIT_COMMIT`을 사용한다. 로컬 빌드의
+Git HEAD fallback은 `source: git`으로 표시하며 운영 배포 확인에는 인정하지 않는다.
+매번 다른 query와 no-cache 요청으로 기대 revision을 기다려 오래된 배포의 200이나
+SPA fallback HTML을 성공으로 판단하지 않는다. 기본 대기 상한은 1,200초다.
+
+```sh
+DEPLOYMENT_SMOKE_RUN=1 \
+DEPLOYMENT_SITE_URL=https://smartlink-bid-client.onrender.com \
+DEPLOYMENT_API_URL=https://smartlink-bid-api.onrender.com \
+DEPLOYMENT_EXPECTED_SHA=<배포할_전체_40자리_Git_SHA> \
+DEPLOYMENT_WAIT_SECONDS=1200 \
+npm run test:e2e:deployment
+```
+
+새 브라우저에서 앱 mount, 메뉴의 법원별검색, 약관·개인정보처리방침 이동과
+정책 경로 직접 진입을 확인한다. 초기 앱이 시도하는 POST refresh는 전송 전에 막고,
+그 요청에서 관찰한 실제 빌드 API origin의 `/api/v1/me`를 브라우저 GET으로 읽어
+비회원 401과 CORS를 검사한다. 로그인·결제·데이터 변경은 수행하지 않는다.
+브라우저의 GET/HEAD 외 요청, WebSocket 및 site/API 외 origin은 차단한다.
+JavaScript 파일 로딩 실패와 앱 예외도 실패로 처리한다.
+
+`playwright.deployment.config.ts`는 `e2e/deployment/`만 수집하며 기존 하네스의
+`test:e2e:all`에는 포함되지 않는다. 실행은 `DEPLOYMENT_SMOKE_RUN=1`로 명시적으로
+활성화해야 한다. 로컬 리허설은 site/API 모두 loopback origin으로 지정하고
+`DEPLOYMENT_SMOKE_ALLOW_LOOPBACK=1`, `DEPLOYMENT_WAIT_SECONDS=30`을 추가한다.
+리허설 서버는 별도로 준비하며 이 설정은 기존 백엔드 하네스를 자동 실행하지 않는다.
+보고서는 `playwright-report/deployment/`, 실패 trace·스크린샷·영상은
+`test-results/playwright-deployment/`에 남긴다.
+
+보호할 동작은 새 배포의 실제 앱 연결과 익명 접근이다(P1). 기존 홈·약관 테스트는
+로컬 Vite/가짜 API를 사용하므로 잘못된 배포 revision, 배포 asset 누락, 실제 API
+origin·CORS 설정 오류와 SPA rewrite 누락을 놓친다. 이 검사는 그 배포 경계만 추가하며
+기능 회귀의 입력 조합이나 인증된 사용자 흐름을 다시 실행하지 않는다.

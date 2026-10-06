@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/write-deployment-revision.mjs",
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test --config=playwright.config.ts",
@@ -32,6 +32,7 @@
     "test:e2e:full": "npm run test:e2e:all && npm run test:e2e:performance",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install chromium",
+    "test:e2e:deployment": "playwright test --config=playwright.deployment.config.ts --forbid-only",
     "validate:forms": "node scripts/validate-knowledge-forms.mjs",
     "preview": "vite preview",
     "test:e2e:media": "playwright test --config=playwright.media.config.ts"
