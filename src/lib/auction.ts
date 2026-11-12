@@ -49,6 +49,12 @@ export type AuctionGoodsSearchItem = {
 export type AuctionGoodsSearchResponse = ApiListResponse<AuctionGoodsSearchItem>
 export type AuctionSearchMode = 'standard' | 'comprehensive' | 'special'
 
+export type AuctionGoodsUsageCounts = {
+  total: number
+  missing: number
+  items: Array<{ value: string; count: number }>
+}
+
 export type CourtDivisionOption = {
   division_number: number
   division_name: string | null
@@ -126,6 +132,17 @@ export function searchGoods(
 
 export function getSpecialGoodsTypes() {
   return apiRequest<{ items: string[] }>('/api/v1/search/special/types')
+}
+
+export function getSearchUsageCounts(
+  params: AuctionSearchParams,
+  mode: AuctionSearchMode,
+  init?: Pick<ApiRequestInit, 'signal'>,
+) {
+  return apiRequest<AuctionGoodsUsageCounts>(withQuery('/api/v1/search/usage-counts', {
+    ...params, goods_usage: undefined, sort_by: undefined, limit: undefined, offset: undefined,
+    search_type: mode,
+  }), init)
 }
 
 export function getCourtDivisionOptions(courtCode: string, signal?: AbortSignal) {

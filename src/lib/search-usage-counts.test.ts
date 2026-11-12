@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { searchGoods, type AuctionGoodsSearchItem } from './auction'
+import { apiRequest } from './api'
 import { getSearchUsageKey, loadSearchUsageCounts } from './search-usage-counts'
 
-vi.mock('./auction', () => ({ searchGoods: vi.fn() }))
-const searchMock = vi.mocked(searchGoods)
-const goods = (usage: string | null, id: number): AuctionGoodsSearchItem => ({
-  schedule_id: `schedule-${id}`, auction_goods_id: id, goods_usage_name: usage,
-})
+vi.mock('./api', async importOriginal => ({
+  ...await importOriginal<typeof import('./api')>(), apiRequest: vi.fn(),
+}))
+const requestMock = vi.mocked(apiRequest)
 
 beforeEach(() => vi.resetAllMocks())
 
@@ -20,63 +19,39 @@ describe('검색 전체의 용도별 건수', () => {
     }
   })
 
-  it('한 페이지에 모든 결과가 있으면 추가 요청 없이 복합 용도와 미등록을 정확히 센다', async () => {
-    const items = [goods('아파트', 1), goods('상가,오피스텔,근린시설', 2), goods('아파트', 3), goods(null, 4), goods('  ', 5)]
-    const result = await loadSearchUsageCounts({}, 'standard', new AbortController().signal, {
-      key: '', params: { offset: 0 }, response: { total: 5, items },
-    })
-    expect(result).toEqual({ total: 5, missing: 2, items: [
-      { value: '아파트', count: 2 }, { value: '상가,오피스텔,근린시설', count: 1 },
-    ] })
-    expect(searchMock).not.toHaveBeenCalled()
-  })
-
-  it('화면 밖의 모든 페이지도 최대 두 요청씩 읽어 전체 건수와 합계를 맞춘다', async () => {
-    const items = Array.from({ length: 225 }, (_, index) => goods(index < 120 ? '아파트' : index < 200 ? '공장' : null, index))
-    let active = 0
-    let peak = 0
-    searchMock.mockImplementation(async (params) => {
-      active += 1
-      peak = Math.max(peak, active)
-      await Promise.resolve()
-      active -= 1
-      return { total: 225, items: items.slice(params.offset, (params.offset ?? 0) + 100) }
-    })
+  it('검색 범위와 특수조건을 한 번의 집계 요청에 전달하고 건수순으로 표시한다', async () => {
+    const counts = { total: 225, missing: 25, items: [
+      { value: '공장', count: 80 }, { value: '상가,오피스텔,근린시설', count: 60 }, { value: '아파트', count: 60 },
+    ] }
+    requestMock.mockResolvedValue({ ...counts, items: [...counts.items].reverse() })
     const controller = new AbortController()
-    const result = await loadSearchUsageCounts({ court_code: 'TEST', half_price: true, goods_usage: ['아파트'], offset: 50 }, 'special', controller.signal)
-    expect(result).toEqual({ total: 225, missing: 25, items: [{ value: '아파트', count: 120 }, { value: '공장', count: 80 }] })
-    expect(peak).toBe(2)
-    expect(searchMock.mock.calls.map(([params]) => params.offset).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([0, 100, 200])
-    for (const [params, mode, init] of searchMock.mock.calls) {
-      expect(params).toMatchObject({ court_code: 'TEST', half_price: true, limit: 100, goods_usage: undefined })
-      expect(mode).toBe('special')
-      expect(init?.signal).toBe(controller.signal)
-    }
+    const result = await loadSearchUsageCounts({
+      q: '도곡동', court_code: 'B000210', special_type: ['유치권', '법정지상권'], match_mode: 'all',
+      goods_usage: ['아파트'], sort_by: 'lowest_desc', limit: 50, offset: 100,
+    }, 'special', controller.signal)
+    expect(result).toEqual(counts)
+    expect(requestMock).toHaveBeenCalledOnce()
+    const [path, init] = requestMock.mock.calls[0]
+    const url = new URL(path, 'http://localhost')
+    expect(url.pathname).toBe('/api/v1/search/usage-counts')
+    expect(Object.fromEntries(url.searchParams)).toMatchObject({
+      q: '도곡동', court_code: 'B000210', search_type: 'special', match_mode: 'all',
+    })
+    expect(url.searchParams.getAll('special_type')).toEqual(['유치권', '법정지상권'])
+    expect(['goods_usage', 'sort_by', 'limit', 'offset'].some(key => url.searchParams.has(key))).toBe(false)
+    expect(init?.signal).toBe(controller.signal)
   })
 
-  it('선택된 용도의 첫 응답을 전체 집계로 오인하지 않는다', async () => {
-    searchMock.mockResolvedValue({ total: 2, items: [goods('아파트', 1), goods('공장', 2)] })
-    const result = await loadSearchUsageCounts({}, 'standard', new AbortController().signal, {
-      key: '', params: { goods_usage: ['아파트'] }, response: { total: 1, items: [goods('아파트', 1)] },
-    })
-    expect(result.total).toBe(2)
-    expect(result.items).toHaveLength(2)
-    expect(searchMock).toHaveBeenCalledOnce()
-  })
-
-  it.each(['changed-total', 'truncated-page', 'network-error'])('중간 페이지 오류(%s)를 부분 집계나 0건으로 반환하지 않는다', async (failure) => {
-    searchMock.mockImplementation(async (params) => {
-      if (params.offset === 0) return { total: 101, items: Array.from({ length: 100 }, (_, index) => goods('아파트', index)) }
-      if (failure === 'network-error') throw new Error('Network unavailable')
-      return { total: failure === 'changed-total' ? 102 : 101, items: [] }
-    })
-    await expect(loadSearchUsageCounts({}, 'standard', new AbortController().signal)).rejects.toThrow()
+  it('집계 오류를 0건이나 전체 목록 조회로 바꾸지 않는다', async () => {
+    requestMock.mockRejectedValue(new Error('Unavailable'))
+    await expect(loadSearchUsageCounts({}, 'standard', new AbortController().signal)).rejects.toThrow('Unavailable')
+    expect(requestMock).toHaveBeenCalledOnce()
   })
 
   it('취소된 조건의 집계는 요청을 시작하지 않는다', async () => {
     const controller = new AbortController()
     controller.abort()
     await expect(loadSearchUsageCounts({}, 'standard', controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
-    expect(searchMock).not.toHaveBeenCalled()
+    expect(requestMock).not.toHaveBeenCalled()
   })
 })

@@ -26,6 +26,9 @@ async function prepareSearchPageApis(page: Page) {
         body: JSON.stringify({ detail: 'E2E anonymous session.' }),
       })
     }
+    if (pathname === '/api/v1/search/usage-counts') {
+      return route.fulfill({ json: { total: 0, missing: 0, items: [] } })
+    }
 
     return route.fulfill({
       status: 200,
@@ -103,7 +106,7 @@ test('목록 아래쪽 법원을 선택해 검색할 수 있다', async ({ page 
   await page.route('**/api/v1/search**', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify({ total: 0, limit: 50, offset: 0, items: [] }),
+    body: JSON.stringify({ total: 0, missing: 0, limit: 50, offset: 0, items: [] }),
   }))
   await page.goto('/court-search')
 

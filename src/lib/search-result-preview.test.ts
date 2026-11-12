@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { GoodsDetailResponse, GoodsPhoto } from './goods'
+import type { GoodsPreviewResponse, GoodsPhoto } from './goods'
 import { getSearchResultPreview } from './search-result-preview'
 
 function detailWithPhotos(urls: Array<string | null>, codes: Array<string | null> = []) {
   return {
     case_display_number: '2025타경123',
     photos: { available: true, items: urls.map((content_url, index) => ({ content_url, photo_division_code: codes[index] ?? null } as GoodsPhoto)) },
-  } as GoodsDetailResponse
+  } as GoodsPreviewResponse
 }
 
 describe('검색 결과 대표 정보', () => {
@@ -46,16 +46,21 @@ describe('검색 결과 대표 정보', () => {
   })
 
   it('기존 응답에 사진 정보가 없더라도 사건번호는 표시한다', () => {
-    const preview = getSearchResultPreview({ case_display_number: '2024타경10' } as GoodsDetailResponse, 1)
+    const preview = getSearchResultPreview({ case_display_number: '2024타경10' } as GoodsPreviewResponse, 1)
     expect(preview).toEqual({ caseNumber: '2024타경10', photoUrl: null })
   })
 
-  it('사건번호의 빈 표시 대신 상세 사건번호를 사용하고 없는 번호는 만들지 않는다', () => {
+  it('미리보기의 빈 사건번호를 임의로 만들지 않는다', () => {
     const detail = detailWithPhotos([])
     detail.case_display_number = '-'
-    detail.case = { case_display_number: ' 2023타경9 ' } as GoodsDetailResponse['case']
-    expect(getSearchResultPreview(detail, 1).caseNumber).toBe('2023타경9')
-    detail.case.case_display_number = ' '
     expect(getSearchResultPreview(detail, 1).caseNumber).toBeNull()
+  })
+
+  it('선택한 물건 사진의 축소 URL을 사용하고 다른 사진의 축소 URL은 사용하지 않는다', () => {
+    const detail = detailWithPhotos(['/api/v1/goods/1/photos/1'])
+    detail.photos.items[0].thumbnail_url = '/api/v1/goods/1/photos/1?thumbnail=true'
+    expect(getSearchResultPreview(detail, 1).photoUrl).toMatch(/\/photos\/1\?thumbnail=true$/)
+    detail.photos.items[0].thumbnail_url = '/api/v1/goods/2/photos/1?thumbnail=true'
+    expect(getSearchResultPreview(detail, 1).photoUrl).toMatch(/\/goods\/1\/photos\/1$/)
   })
 })

@@ -5,9 +5,9 @@ const api = 'http://127.0.0.1:8191'
 const client = 'http://127.0.0.1:3191'
 const codes = ['000241', '000244', '000243', '000242', '000246', null, '000249', '000245', '000245', '000241', '000244', null]
 
-// 합성 사진의 분류만 바꾸며 모든 미디어는 기존 메모리 CDN에서 읽는다.
+// 합성 사진의 분류만 바꾸며 미디어는 기존 메모리 S3·CDN에서 읽는다.
 async function installPhotoScenario(page: Page, divisions: Array<string | null>) {
-  await page.route(`${api}/api/v1/goods/1`, async route => {
+  await page.route(url => url.origin === api && /^\/api\/v1\/goods\/1(?:\/preview)?$/.test(url.pathname), async route => {
     const response = await route.fetch()
     const detail: GoodsDetailResponse = await response.json()
     detail.photos.items = detail.photos.items.slice(0, divisions.length).map((photo, index) => ({
@@ -30,6 +30,9 @@ async function installPhotoScenario(page: Page, divisions: Array<string | null>)
       printed_address: '대표사진 검증용 합성 물건',
     }],
   } }))
+  await page.route(`${api}/api/v1/search/usage-counts?*`, route => route.fulfill({ json: {
+    total: 1, missing: 0, items: [{ value: '아파트', count: 1 }],
+  } }))
 }
 
 // 검색 대표사진을 실제로 읽은 뒤 상세 링크를 클릭하여 첫 사진과 대조한다.
@@ -40,11 +43,15 @@ async function openDetailFromSearch(page: Page) {
   await expect(image).toBeVisible()
   await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBe(240)
   const source = await image.getAttribute('src')
+  const detailReady = page.waitForResponse(`${api}/api/v1/goods/1`)
   await card.getByRole('link', { name: '상세보기' }).click()
   await expect(page).toHaveURL((url) => url.pathname === '/goods/1')
+  const detail = await (await detailReady).json() as GoodsDetailResponse
+  const selected = detail.photos.items.find(photo => source === `${api}${photo.thumbnail_url}` || source === `${api}${photo.cdn_path}`)
+  expect(selected).toBeDefined()
   const gallery = page.getByRole('region', { name: '물건 사진 목록' })
   await gallery.scrollIntoViewIfNeeded()
-  await expect(gallery.getByRole('img').first()).toHaveAttribute('src', source!)
+  await expect(gallery.getByRole('img').first()).toHaveAttribute('src', `${api}${selected!.cdn_path}`)
   return gallery
 }
 
@@ -74,7 +81,8 @@ test('검색과 상세는 첫 관련사진을 공유하고 대표를 제외한 �
   }
   const firstBatch = await (await request.get(`${api}/__photo_cost/stats`)).json()
   expect(firstBatch.origin_reads).toBe(3)
-  expect(mediaRequests.every(url => url.startsWith(`${api}/g/`) && !url.includes('?'))).toBe(true)
+  expect(mediaRequests.every(url => (url.startsWith(`${api}/g/`) && !url.includes('?')) ||
+    url === `${api}/api/v1/goods/1/photos/107?thumbnail=true`)).toBe(true)
   for (const remaining of [9, 6, 3]) {
     await gallery.getByRole('button', { name: `사진 더 보기 (${remaining}장)` }).click()
   }

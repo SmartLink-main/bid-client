@@ -15,7 +15,7 @@ export default function SearchResultPhoto({ source, status, onRetry }: {
     <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-100 sm:aspect-[4/3]">
       {source && !failed && (
         <img
-          src={attempt ? `${source}?retry=${attempt}` : source}
+          src={attempt ? `${source}${source.includes('?') ? '&' : '?'}retry=${attempt}` : source}
           alt="물건 대표 사진"
           loading="lazy"
           decoding="async"

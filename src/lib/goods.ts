@@ -278,6 +278,7 @@ export type GoodsPhoto = {
   file_size_bytes: Nullable<number>
   collected_at: Nullable<string>
   cdn_path?: string | null
+  thumbnail_url?: string | null
 }
 
 export type GoodsSaleAreaValue = {
@@ -351,6 +352,8 @@ export type GoodsDetailResponse = {
     legacy_homepage_url: string
   }
 }
+
+export type GoodsPreviewResponse = Pick<GoodsDetailResponse, 'auction_goods_id' | 'case_display_number' | 'photos'>
 
 export type QuestionGoodsRequest = {
   question: string
@@ -426,6 +429,13 @@ export function getGoodsDetail(
 ) {
   return apiRequest<GoodsDetailResponse>(
     `/api/v1/goods/${normalizedGoodsId(auctionGoodsId)}`,
+    signal ? { signal } : undefined,
+  )
+}
+
+export function getGoodsPreview(auctionGoodsId: number | string, signal?: AbortSignal) {
+  return apiRequest<GoodsPreviewResponse>(
+    `/api/v1/goods/${normalizedGoodsId(auctionGoodsId)}/preview`,
     signal ? { signal } : undefined,
   )
 }

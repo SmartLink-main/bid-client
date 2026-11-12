@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AuctionGoodsSearchItem } from './auction'
-import { getGoodsDetail, getGoodsPhotoUrl, type GoodsDetailResponse } from './goods'
+import { getApiUrl } from './api'
+import { getGoodsPreview, getGoodsPhotoUrl, type GoodsPreviewResponse } from './goods'
 import { getRepresentativeGoodsPhoto } from './goods-photo-display'
 
 export type SearchResultPreview = { caseNumber: string | null; photoUrl: string | null }
@@ -14,15 +15,17 @@ function validCaseNumber(value: string | null | undefined) {
   return number && number !== '-' ? number : null
 }
 
-export function getSearchResultPreview(detail: GoodsDetailResponse, goodsId: number): SearchResultPreview {
+export function getSearchResultPreview(detail: GoodsPreviewResponse, goodsId: number): SearchResultPreview {
   const photo = getRepresentativeGoodsPhoto(detail.photos?.items ?? [], goodsId)
   return {
-    caseNumber: validCaseNumber(detail.case_display_number) || validCaseNumber(detail.case?.case_display_number),
-    photoUrl: getGoodsPhotoUrl(photo?.content_url, photo?.cdn_path),
+    caseNumber: validCaseNumber(detail.case_display_number),
+    photoUrl: photo?.thumbnail_url && photo.thumbnail_url === `${photo.content_url}?thumbnail=true`
+      ? getApiUrl(photo.thumbnail_url)
+      : getGoodsPhotoUrl(photo?.content_url, photo?.cdn_path),
   }
 }
 
-// 사진과 사건번호를 같은 상세 응답에서 읽고, 화면에 가까운 카드만 조회한다.
+// 사진과 사건번호만 담은 응답을 읽고, 화면에 가까운 카드만 조회한다.
 export function useSearchResultPreview(goods: AuctionGoodsSearchItem, cache: SearchResultPreviewCache) {
   const cardRef = useRef<HTMLElement>(null)
   const goodsId = goods.auction_goods_id
@@ -38,7 +41,7 @@ export function useSearchResultPreview(goods: AuctionGoodsSearchItem, cache: Sea
       if (!entries.some((entry) => entry.isIntersecting)) return
       observer.disconnect()
       setResult({ goodsId })
-      getGoodsDetail(goodsId, controller.signal)
+      getGoodsPreview(goodsId, controller.signal)
         .then((detail) => {
           if (controller.signal.aborted) return
           const preview = getSearchResultPreview(detail, goodsId)

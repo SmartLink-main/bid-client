@@ -1,9 +1,22 @@
 import { expect, test, type Page } from '@playwright/test'
 import type { AuctionGoodsSearchItem } from '../src/lib/auction'
 
+function usageCounts(items: AuctionGoodsSearchItem[]) {
+  const values = [...new Set(items.map(item => item.goods_usage_name).filter(value => value?.trim()))]
+  return {
+    total: items.length,
+    missing: items.filter(item => !item.goods_usage_name?.trim()).length,
+    items: values.sort().map(value => ({ value, count: items.filter(item => item.goods_usage_name === value).length })),
+  }
+}
+
 // 전체 데이터에 필터·페이지를 적용하는 가짜 API로 집계 범위와 실제 클릭을 검증한다.
 async function prepareUsageResults(page: Page, usages: Array<string | null> = ['아파트', '상가', '상가,오피스텔,근린시설', null]) {
   const requests: URL[] = []
+  page.on('request', request => {
+    const url = new URL(request.url())
+    if (url.pathname.startsWith('/api/v1/')) requests.push(url)
+  })
   const items: AuctionGoodsSearchItem[] = usages.map((usage, index) => ({
     auction_goods_id: 9100 + index, schedule_id: `usage-filter-${index}`,
     case_number: `2099타경${index + 1}`,
@@ -19,14 +32,14 @@ async function prepareUsageResults(page: Page, usages: Array<string | null> = ['
   })
   await page.route('**/api/v1/**', (route) => {
     const url = new URL(route.request().url())
-    requests.push(url)
     if (url.pathname === '/api/v1/refresh') return route.fulfill({ status: 401, json: { detail: 'Anonymous local test.' } })
     if (url.pathname === '/api/v1/search/special/types') return route.fulfill({ json: { items: ['유치권'] } })
-    const goodsMatch = url.pathname.match(/^\/api\/v1\/goods\/(\d+)$/)
+    const goodsMatch = url.pathname.match(/^\/api\/v1\/goods\/(\d+)\/preview$/)
     if (goodsMatch) {
       const goods = items.find((item) => item.auction_goods_id === Number(goodsMatch[1]))
       if (goods) return route.fulfill({ json: { case_display_number: goods.case_number, photos: { items: [] } } })
     }
+    if (url.pathname === '/api/v1/search/usage-counts') return route.fulfill({ json: usageCounts(items) })
     if (['/api/v1/search', '/api/v1/search/special', '/api/v1/search/comprehensive'].includes(url.pathname)) {
       const selected = url.searchParams.getAll('goods_usage')
       const filtered = selected.length ? items.filter((item) => selected.includes(item.goods_usage_name ?? '')) : items
@@ -72,8 +85,9 @@ for (const mode of [
     await expect(facet.getByRole('button', { name: '전체 4건', exact: true })).toHaveAttribute('aria-pressed', 'true')
     await expect(facet.getByText('용도 미등록 1건', { exact: true })).toBeVisible()
     await expect(page.getByRole('combobox', { name: '용도', exact: true })).toHaveCount(0)
-    // 네 건을 모두 받은 초기 응답은 추가 집계 요청 없이 재사용한다.
+    // 목록과 집계는 각각 한 번 요청하며, 집계 때문에 목록을 다시 읽지 않는다.
     expect(requests.filter((url) => url.pathname === mode.api)).toHaveLength(1)
+    expect(requests.filter((url) => url.pathname === '/api/v1/search/usage-counts')).toHaveLength(1)
     await facet.getByRole('button', { name: '아파트 1건', exact: true }).click()
     await expect(page.getByRole('article')).toHaveCount(1)
     await expect(page.getByRole('heading', { name: '2099타경1', exact: true })).toBeVisible()
@@ -125,14 +139,28 @@ test('담당 법원이 누락돼도 본원명이나 구분선을 표시하지 �
   await expect(card.getByRole('heading', { name: '2099타경1' })).toBeVisible()
 })
 
-test('현재 페이지 밖의 모든 건수를 집계하고 페이지·용도 변경 시 재사용한다', async ({ page }) => {
+test('목록 응답을 기다리지 않고 전체 건수를 한 번에 조회하며 페이지·용도 변경 시 재사용한다', async ({ page }) => {
   const { requests } = await prepareUsageResults(page, Array.from({ length: 225 }, (_, index) => index < 120 ? '아파트' : '공장'))
-  await page.goto('/search?sido=서울특별시&sigungu=강남구&sort_by=lowest_desc&start_date=2099-01-01&limit=50')
   const facet = filters(page)
-  await expect(facet.getByRole('button', { name: '아파트 120건', exact: true })).toBeVisible()
-  await expect(facet.getByRole('button', { name: '공장 105건', exact: true })).toBeVisible()
-  const countRequests = () => requests.filter((url) => url.searchParams.get('limit') === '100')
-  expect(countRequests().map((url) => Number(url.searchParams.get('offset'))).sort((a, b) => a - b)).toEqual([0, 100, 200])
+  let release = () => {}
+  const pending = new Promise<void>(resolve => { release = resolve })
+  await page.route('**/api/v1/search?**', async route => {
+    await pending
+    await route.fallback()
+  }, { times: 1 })
+  try {
+    await page.goto('/search?sido=서울특별시&sigungu=강남구&sort_by=lowest_desc&start_date=2099-01-01&limit=50')
+    await expect(facet.getByRole('button', { name: '아파트 120건', exact: true })).toBeVisible()
+    await expect(facet.getByRole('button', { name: '공장 105건', exact: true })).toBeVisible()
+    await expect(page.getByRole('status').filter({ hasText: '검색 결과를 불러오는 중' })).toBeVisible()
+    await expect(page.getByRole('article')).toHaveCount(0)
+  } finally {
+    release()
+  }
+  await expect(page.getByRole('article')).toHaveCount(50)
+  const countRequests = () => requests.filter((url) => url.pathname === '/api/v1/search/usage-counts')
+  expect(countRequests()).toHaveLength(1)
+  expect(requests.filter((url) => url.pathname === '/api/v1/search' && url.searchParams.get('limit') === '100')).toHaveLength(0)
   await page.getByRole('button', { name: '다음', exact: true }).click()
   await expect(page).toHaveURL((url) => url.searchParams.get('offset') === '50')
   await expect(page.getByRole('heading', { name: '2099타경51', exact: true })).toBeVisible()
@@ -149,7 +177,7 @@ test('현재 페이지 밖의 모든 건수를 집계하고 페이지·용도 �
   await page.goForward()
   await expect(facet.getByRole('button', { name: '공장 105건', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('heading', { name: '2099타경121', exact: true })).toBeVisible()
-  expect(countRequests()).toHaveLength(3)
+  expect(countRequests()).toHaveLength(1)
 })
 
 test('다양한 용도는 건수순 선택 목록으로 표시되고 모바일에서도 키보드로 선택한다', async ({ page }, testInfo) => {
@@ -183,27 +211,21 @@ test('복수 용도 URL은 유지하고 건수는 용도 선택 전 전체 결�
   await expect(facet.getByRole('button', { name: '전체 4건', exact: true })).toBeVisible()
   await expect(page.getByRole('article')).toHaveCount(1)
   expect(new URL(page.url()).searchParams.getAll('goods_usage')).toEqual(['아파트', '자동차'])
-  expect(requests.find((url) => url.searchParams.get('limit') === '100')?.searchParams.has('goods_usage')).toBe(false)
+  expect(requests.find((url) => url.pathname === '/api/v1/search/usage-counts')?.searchParams.has('goods_usage')).toBe(false)
   await facet.getByRole('button', { name: '전체 4건', exact: true }).click()
   await expect(page.getByRole('article')).toHaveCount(4)
   expect(new URL(page.url()).searchParams.get('court_code')).toBe('B000210')
 })
 
-test('집계 중간 페이지 실패 시 부분 건수를 숨기고 결과 목록을 유지한 채 재시도한다', async ({ page }) => {
+test('집계 실패 시 거짓 건수를 숨기고 결과 목록을 유지한 채 재시도한다', async ({ page }) => {
   const { requests } = await prepareUsageResults(page, Array<string>(101).fill('아파트'))
-  await page.route('**/api/v1/search?**', (route) => {
-    const params = new URL(route.request().url()).searchParams
-    if (params.get('limit') === '100' && params.get('offset') === '100') {
-      return route.fulfill({ status: 503, json: { detail: 'Unavailable' } })
-    }
-    return route.fallback()
-  })
+  await page.route('**/api/v1/search/usage-counts?**', route => route.fulfill({ status: 503, json: { detail: 'Unavailable' } }))
   await page.goto('/search?court_name=서울')
   const facet = filters(page)
   await expect(facet.getByRole('alert')).toBeVisible()
   await expect(facet.getByRole('button', { name: /아파트/ })).toHaveCount(0)
   await expect(page.getByRole('article')).toHaveCount(50)
-  await page.unroute('**/api/v1/search?**')
+  await page.unroute('**/api/v1/search/usage-counts?**')
   await facet.getByRole('button', { name: '건수 다시 불러오기', exact: true }).click()
   await expect(facet.getByRole('button', { name: '아파트 101건', exact: true })).toBeVisible()
   expect(requests.filter((url) => url.pathname === '/api/v1/search' && url.searchParams.get('limit') === '50')).toHaveLength(1)
@@ -213,18 +235,18 @@ test('조건이 바뀐 뒤 도착한 이전 건수로 새 용도 목록을 덮�
   const { items } = await prepareUsageResults(page, Array<string>(51).fill('아파트'))
   let release = () => {}
   const pending = new Promise<void>((resolve) => { release = resolve })
-  await page.route('**/api/v1/search?**', async (route) => {
+  await page.route('**/api/v1/search/usage-counts?**', async (route) => {
     const params = new URL(route.request().url()).searchParams
-    if (params.get('q') === '이전' && params.get('limit') === '100') {
+    if (params.get('q') === '이전') {
       await pending
-      return route.fulfill({ json: { total: 51, items } })
+      return route.fulfill({ json: usageCounts(items) })
     }
     if (params.get('q') === '새조건') {
-      return route.fulfill({ json: { total: 1, items: [{ ...items[0], goods_usage_name: '창고' }] } })
+      return route.fulfill({ json: { total: 1, missing: 0, items: [{ value: '창고', count: 1 }] } })
     }
     return route.fallback()
   })
-  const oldRequest = page.waitForRequest((request) => new URL(request.url()).searchParams.get('limit') === '100')
+  const oldRequest = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/v1/search/usage-counts')
   await page.goto('/search?q=이전')
   await oldRequest
   await page.getByLabel('경매 물건 검색어').fill('새조건')
@@ -247,18 +269,19 @@ test('용도 조회 실패 후 같은 선택으로 재시도하고 실제 빈 �
   await page.getByRole('button', { name: '다시 시도', exact: true }).click()
   await expect(page.getByRole('article')).toHaveCount(1)
   await page.route('**/api/v1/search?**', (route) => route.fulfill({ json: { total: 0, items: [] } }))
+  await page.route('**/api/v1/search/usage-counts?**', route => route.fulfill({ json: { total: 0, missing: 0, items: [] } }))
   await page.getByLabel('경매 물건 검색어').fill('없는 조건')
   await page.getByLabel('경매 물건 검색어').press('Enter')
   await expect(facet.getByRole('button', { name: '전체 0건', exact: true })).toBeVisible()
   await expect(page.getByText('조건에 맞는 물건이 없습니다.', { exact: true })).toBeVisible()
 })
 
-test('누락된 사건번호는 상세정보로 보완하고 용도 변경 후에도 재사용한다', async ({ page }, testInfo) => {
-  const { items } = await prepareUsageResults(page, ['기타'])
+test('누락된 사건번호는 미리보기로 보완하고 용도 변경 후에도 재사용한다', async ({ page }, testInfo) => {
+  const { items, requests } = await prepareUsageResults(page, ['기타'])
   items[0].case_number = null
-  let detailRequests = 0
-  await page.route('**/api/v1/goods/9100', (route) => {
-    detailRequests += 1
+  let previewRequests = 0
+  await page.route('**/api/v1/goods/9100/preview', (route) => {
+    previewRequests += 1
     return route.fulfill({ json: { case_display_number: '2025타경103472' } })
   })
   await page.goto('/court-search')
@@ -273,7 +296,8 @@ test('누락된 사건번호는 상세정보로 보완하고 용도 변경 후�
   await filters(page).getByRole('button', { name: '전체 1건', exact: true }).click()
   await expect(page).toHaveURL((url) => !url.searchParams.has('goods_usage'))
   await expect(card.getByRole('heading', { name: '2025타경103472', exact: true })).toBeVisible()
-  expect(detailRequests).toBe(1)
+  expect(previewRequests).toBe(1)
+  expect(requests.filter(url => /^\/api\/v1\/goods\/\d+$/.test(url.pathname))).toHaveLength(0)
   await page.screenshot({ path: testInfo.outputPath('case-number-desktop.png'), fullPage: true })
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(card.getByRole('heading', { name: '2025타경103472', exact: true })).toBeVisible()
@@ -283,15 +307,15 @@ test('누락된 사건번호는 상세정보로 보완하고 용도 변경 후�
 test('사건번호 조회 실패는 카드에서 재시도하고 번호가 없으면 임의로 만들지 않는다', async ({ page }) => {
   const { items } = await prepareUsageResults(page, ['아파트'])
   items[0].case_number = null
-  await page.route('**/api/v1/goods/9100', (route) => route.fulfill({ json: { case_display_number: '2024타경99' } }))
-  await page.route('**/api/v1/goods/9100', (route) => route.fulfill({ status: 503, json: { detail: 'Unavailable' } }), { times: 1 })
+  await page.route('**/api/v1/goods/9100/preview', (route) => route.fulfill({ json: { case_display_number: '2024타경99' } }))
+  await page.route('**/api/v1/goods/9100/preview', (route) => route.fulfill({ status: 503, json: { detail: 'Unavailable' } }), { times: 1 })
   await page.goto('/search')
   const card = page.getByRole('article')
   await expect(card.getByRole('heading', { name: '사건번호 확인 불가', exact: true })).toBeVisible()
   await expect(card.getByText('서울특별시 강남구 테헤란로 1', { exact: true })).toBeVisible()
   await card.getByRole('button', { name: '사건번호 다시 불러오기', exact: true }).click()
   await expect(card.getByRole('heading', { name: '2024타경99', exact: true })).toBeVisible()
-  await page.route('**/api/v1/goods/9100', (route) => route.fulfill({ json: { case_display_number: '' } }))
+  await page.route('**/api/v1/goods/9100/preview', (route) => route.fulfill({ json: { case_display_number: '' } }))
   await page.goto('/search?q=번호없음')
   await expect(card.getByRole('heading', { name: '사건번호 정보 없음', exact: true })).toBeVisible()
 })
@@ -299,19 +323,19 @@ test('사건번호 조회 실패는 카드에서 재시도하고 번호가 없�
 test('화면 밖 물건의 사건번호는 미리 전부 조회하지 않고 스크롤할 때 조회한다', async ({ page }) => {
   const { items } = await prepareUsageResults(page, Array<string>(50).fill('아파트'))
   items.forEach((item) => { item.case_number = null })
-  const detailIds: number[] = []
-  await page.route('**/api/v1/goods/*', (route) => {
-    const id = Number(new URL(route.request().url()).pathname.split('/').at(-1))
-    detailIds.push(id)
+  const previewIds: number[] = []
+  await page.route('**/api/v1/goods/*/preview', (route) => {
+    const id = Number(new URL(route.request().url()).pathname.split('/').at(-2))
+    previewIds.push(id)
     return route.fulfill({ json: { case_display_number: `2088타경${id - 9099}` } })
   })
   await page.goto('/search')
   await expect(page.getByRole('heading', { name: '2088타경1', exact: true })).toBeVisible()
-  expect(detailIds).not.toContain(9149)
-  expect(detailIds.length).toBeLessThan(50)
+  expect(previewIds).not.toContain(9149)
+  expect(previewIds.length).toBeLessThan(50)
   await page.getByRole('article').last().scrollIntoViewIfNeeded()
   await expect(page.getByRole('heading', { name: '2088타경50', exact: true })).toBeVisible()
-  expect(detailIds).toContain(9149)
+  expect(previewIds).toContain(9149)
 })
 
 test('로그인한 사용자에게도 검색 결과의 관심 저장 버튼과 상태 조회가 없다', async ({ page }) => {
@@ -334,8 +358,8 @@ for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 })
     const usages = ['아파트', '상가,오피스텔,근린시설', null]
     await prepareUsageResults(page, usages)
-    await page.route('**/api/v1/goods/*', (route) => {
-      const id = new URL(route.request().url()).pathname.split('/').at(-1)
+    await page.route('**/api/v1/goods/*/preview', (route) => {
+      const id = new URL(route.request().url()).pathname.split('/').at(-2)
       return route.fulfill({ json: { photos: { items: [{ content_url: `/api/v1/goods/${id}/photos/1` }] } } })
     })
     await page.route('**/api/v1/goods/*/photos/*', (route) => route.fulfill({ contentType: 'image/svg+xml', body: representativePhoto }))
@@ -407,7 +431,7 @@ for (const width of [1280, 390]) {
       auction_date: '2026-09-17',
       land_area_pyeong: 123.456, building_area_pyeong: 32.1,
     })
-    await page.route('**/api/v1/goods/9100', (route) => route.fulfill({ json: {
+    await page.route('**/api/v1/goods/9100/preview', (route) => route.fulfill({ json: {
       photos: { items: [{ content_url: '/api/v1/goods/9100/photos/1', photo_division_code: '000245' }] },
     } }))
     await page.route('**/api/v1/goods/9100/photos/1', (route) => route.fulfill({ contentType: 'image/svg+xml', body: representativePhoto }))
@@ -469,10 +493,10 @@ for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 })
     const { items } = await prepareUsageResults(page, ['아파트'])
     items[0].case_number = null
-    let detailRequests = 0
+    let previewRequests = 0
     const photoRequests: string[] = []
-    await page.route('**/api/v1/goods/9100', (route) => {
-      detailRequests += 1
+    await page.route('**/api/v1/goods/9100/preview', (route) => {
+      previewRequests += 1
       return route.fulfill({ json: { case_display_number: '2025타경103472', photos: { items: [
         { content_url: '/api/v1/goods/9100/photos/1', photo_division_code: '000244' },
         { content_url: '/api/v1/goods/9100/photos/2', photo_division_code: '000241' },
@@ -502,19 +526,22 @@ for (const width of [1280, 390]) {
     await expect(page).toHaveURL((url) => url.searchParams.get('goods_usage') === '아파트')
     await expect(photo).toBeVisible()
     await expect(heading).toBeVisible()
-    expect(detailRequests).toBe(1)
+    expect(previewRequests).toBe(1)
     await page.screenshot({ path: testInfo.outputPath(`representative-photo-${width}.png`), fullPage: true })
   })
 }
 
 test('대표 사진이 없거나 이미지 응답이 실패해도 카드 내용을 유지하고 재시도로 복구한다', async ({ page }) => {
   await prepareUsageResults(page, ['아파트', '기타'])
-  await page.route('**/api/v1/goods/9100', (route) => route.fulfill({ json: {
-    case_display_number: '2099타경1', photos: { items: [{ content_url: '/api/v1/goods/9100/photos/1' }] },
+  await page.route('**/api/v1/goods/9100/preview', (route) => route.fulfill({ json: {
+    case_display_number: '2099타경1', photos: { items: [{
+      content_url: '/api/v1/goods/9100/photos/1', thumbnail_url: '/api/v1/goods/9100/photos/1?thumbnail=true',
+    }] },
   } }))
   let photoRequests = 0
   await page.route('**/api/v1/goods/9100/photos/1*', (route) => {
     photoRequests += 1
+    expect(new URL(route.request().url()).searchParams.get('thumbnail')).toBe('true')
     return photoRequests === 1
       ? route.fulfill({ status: 503, body: 'Unavailable' })
       : route.fulfill({ contentType: 'image/svg+xml', body: representativePhoto })
@@ -539,8 +566,8 @@ test('대표 사진은 관련사진이 없으면 전경도, 전경도도 없으�
     '9101': ['000242', '000244'],
     '9102': ['000242'],
   }
-  await page.route('**/api/v1/goods/*', (route) => {
-    const id = new URL(route.request().url()).pathname.split('/').at(-1)!
+  await page.route('**/api/v1/goods/*/preview', (route) => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-2)!
     return route.fulfill({ json: { case_display_number: '2025타경1', photos: { items: codesByGoods[id].map((code, index) => ({
       photo_division_code: code, content_url: `/api/v1/goods/${id}/photos/${index + 1}`,
     })) } } })
@@ -560,11 +587,11 @@ test('대표 사진은 관련사진이 없으면 전경도, 전경도도 없으�
 test('사진 정보 조회 실패는 재시도하고 같은 사건의 다른 물건 사진을 섞지 않는다', async ({ page }) => {
   const { items } = await prepareUsageResults(page, ['아파트', '기타'])
   items.forEach((item) => { item.case_id = 'same-case'; item.case_number = '2025타경1' })
-  await page.route('**/api/v1/goods/*', (route) => {
-    const id = new URL(route.request().url()).pathname.split('/').at(-1)
+  await page.route('**/api/v1/goods/*/preview', (route) => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-2)
     return route.fulfill({ json: { case_display_number: '2025타경1', photos: { items: [{ content_url: `/api/v1/goods/${id}/photos/1` }] } } })
   })
-  await page.route('**/api/v1/goods/9100', (route) => route.fulfill({ status: 503, json: { detail: 'Unavailable' } }), { times: 1 })
+  await page.route('**/api/v1/goods/9100/preview', (route) => route.fulfill({ status: 503, json: { detail: 'Unavailable' } }), { times: 1 })
   await page.route('**/api/v1/goods/*/photos/*', (route) => route.fulfill({ contentType: 'image/svg+xml', body: representativePhoto }))
   await page.goto('/search')
   const first = page.getByRole('article').first()

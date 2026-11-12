@@ -24,6 +24,7 @@ async function prepareApis(page: Page) {
       return route.fulfill({ status: 401, json: { detail: 'Anonymous local test.' } })
     }
     if (url.pathname === '/api/v1/search/special/types') body = { items: ['유치권', '법정지상권'] }
+    if (url.pathname === '/api/v1/search/usage-counts') body = { total: 0, missing: 0, items: [] }
     if (url.pathname === '/api/v1/geo/station-facets') {
       body = { cities: [{ city: '서울', label: '수도권', total: 1, lines: [{ line: '2호선', total: 1 }] }] }
     }

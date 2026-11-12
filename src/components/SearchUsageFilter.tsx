@@ -2,30 +2,27 @@ import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { AuctionSearchMode, AuctionSearchParams } from '../lib/auction'
 import { getKoreanErrorMessage } from '../lib/api'
-import { loadSearchUsageCounts, type SearchUsageCounts, type SearchUsageSeed } from '../lib/search-usage-counts'
+import { loadSearchUsageCounts, type SearchUsageCounts } from '../lib/search-usage-counts'
 
 // 검색 전체의 용도별 건수를 선택 가능한 목록으로 표시한다.
 export default function SearchUsageFilter({
-  contextKey, params, mode, seed, selected, onSelect,
+  contextKey, params, mode, selected, onSelect,
 }: {
   contextKey: string
   params: AuctionSearchParams
   mode: AuctionSearchMode
-  seed: SearchUsageSeed | null
   selected: string[]
   onSelect: (usage: string | null) => void
 }) {
   const [result, setResult] = useState<{ key: string; counts?: SearchUsageCounts; error?: string } | null>(null)
   const [retry, setRetry] = useState(0)
-  const ready = seed?.key === contextKey
 
   useEffect(() => {
-    if (!ready || !seed) return
     const controller = new AbortController()
     queueMicrotask(() => {
       if (!controller.signal.aborted) setResult({ key: contextKey })
     })
-    loadSearchUsageCounts(params, mode, controller.signal, seed)
+    loadSearchUsageCounts(params, mode, controller.signal)
       .then((counts) => {
         if (!controller.signal.aborted) setResult({ key: contextKey, counts })
       })
@@ -35,9 +32,8 @@ export default function SearchUsageFilter({
         controller.abort()
       })
     return () => controller.abort()
-  }, [contextKey, mode, params, ready, retry, seed])
+  }, [contextKey, mode, params, retry])
 
-  if (!ready) return null
   const current = result?.key === contextKey ? result : null
   const counts = current?.counts
 

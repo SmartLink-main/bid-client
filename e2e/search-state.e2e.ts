@@ -46,16 +46,19 @@ async function prepareApi(
       return route.fulfill({ status: 401, json: { detail: 'Anonymous local test.' } })
     }
     if (url.pathname === '/api/v1/search') {
-      // 용도 집계의 별도 요청에는 검색 상태 오류를 주입하지 않는다.
-      if (respondToSearch && url.searchParams.get('limit') !== '100') {
-        return respondToSearch(route, url)
-      }
+      if (respondToSearch) return respondToSearch(route, url)
       return route.fulfill({ json: searchResponse(url) })
+    }
+    if (url.pathname === '/api/v1/search/usage-counts') {
+      const { items, total } = searchResponse(url)
+      return route.fulfill({ json: { total, missing: 0, items: ['아파트', '오피스텔']
+        .map(value => ({ value, count: items.filter(item => item.goods_usage_name === value).length }))
+        .filter(item => item.count > 0) } })
     }
     if (/^\/api\/v1\/goods\/\d+\/comments$/.test(url.pathname)) {
       return route.fulfill({ json: { total: 0, limit: 20, offset: 0, items: [] } })
     }
-    const match = url.pathname.match(/^\/api\/v1\/goods\/(\d+)$/)
+    const match = url.pathname.match(/^\/api\/v1\/goods\/(\d+)(?:\/preview)?$/)
     const item = match && goods.find(good => good.auction_goods_id === Number(match[1]))
     if (item) {
       // 기존 검색 카드의 최소 상세 응답에 탐색 화면에 필요한 요약만 더한다.
@@ -79,8 +82,7 @@ function responseGate() {
 function primarySearch(page: Page, query: string) {
   return page.waitForResponse(response => {
     const url = new URL(response.url())
-    return url.pathname === '/api/v1/search' && url.searchParams.get('q') === query &&
-      url.searchParams.get('limit') !== '100'
+    return url.pathname === '/api/v1/search' && url.searchParams.get('q') === query
   })
 }
 

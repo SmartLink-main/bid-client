@@ -40,7 +40,7 @@ test('AI 검색 메뉴를 제거하고 홈 키워드 검색은 유지한다', as
   await page.route('**/api/v1/search**', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify({ total: 0, limit: 50, offset: 0, items: [] }),
+    body: JSON.stringify({ total: 0, missing: 0, limit: 50, offset: 0, items: [] }),
   }))
   await page.getByRole('button', { name: '전체 메뉴 닫기' }).click()
   await page.getByPlaceholder('예: 2023타경1234, 서울중앙지방법원, 강남구 아파트').fill('서울 아파트')

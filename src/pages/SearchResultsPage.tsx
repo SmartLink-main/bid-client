@@ -30,7 +30,7 @@ import {
   searchResultSortOptions,
 } from '../lib/search-results'
 import { COURT_OPTIONS } from '../lib/search-filter-options'
-import { getSearchUsageKey, type SearchUsageSeed } from '../lib/search-usage-counts'
+import { getSearchUsageKey } from '../lib/search-usage-counts'
 import { useSearchResultPreview, type SearchResultPreviewCache } from '../lib/search-result-preview'
 import { ArrowUpDown, CalendarDays, ChevronLeft, ChevronRight, Loader2, MapPin, Search } from 'lucide-react'
 
@@ -301,7 +301,6 @@ export default function SearchResultsPage() {
   const isLoading = !currentPage || currentPage.status === 'loading'
   const errorMessage = currentPage?.status === 'error' ? currentPage.message : ''
   const [query, setQuery] = useState(currentSearchParams.get('q') || '')
-  const [usageSeed, setUsageSeed] = useState<SearchUsageSeed | null>(null)
   const filterLabels = useFilterLabels(currentSearchParams)
   const usageContextKey = getSearchUsageKey(normalizedSearchKey)
   const usageParams = useMemo(() => paramsFromSearch(new URLSearchParams(usageContextKey)), [usageContextKey])
@@ -355,7 +354,6 @@ export default function SearchResultsPage() {
         }
 
         setPageState({ key: requestKey, status: 'success', response })
-        setUsageSeed((current) => current?.key === usageContextKey ? current : { key: usageContextKey, params, response })
       })
       .catch((error: unknown) => {
         if (isActive && !controller.signal.aborted) {
@@ -371,7 +369,7 @@ export default function SearchResultsPage() {
       isActive = false
       controller.abort()
     }
-  }, [currentSearchParams, requestKey, searchMode, setSearchParams, usageContextKey])
+  }, [currentSearchParams, requestKey, searchMode, setSearchParams])
 
   const changeSearchParams = (next: URLSearchParams) => {
     // 라우터의 화면 전환이 지연돼도 새 검색을 제출한 순간 이전 결과를 숨긴다.
@@ -481,7 +479,6 @@ export default function SearchResultsPage() {
             contextKey={usageContextKey}
             params={usageParams}
             mode={searchMode}
-            seed={usageSeed}
             selected={currentSearchParams.getAll('goods_usage')}
             onSelect={handleUsageSelect}
           />
