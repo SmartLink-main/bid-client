@@ -237,9 +237,12 @@ test('상세 새로고침과 새 탭 뒤 검색 조건·정렬·두 번째 페�
   await assertRestored(page)
   await page.screenshot({ path: testInfo.outputPath('search-restored-after-detail-reload.png') })
 
-  const opened = context.waitForEvent('page')
-  await page.getByRole('article').first().getByRole('link', { name: '상세보기', exact: true }).click({ button: 'middle' })
-  const detailTab = await opened
+  const detailHref = await page.getByRole('article').first()
+    .getByRole('link', { name: '상세보기', exact: true }).getAttribute('href')
+  expect(detailHref).toBeTruthy()
+  // 새 탭에는 React 이동 상태가 없으므로 화면의 실제 링크만으로 복구해야 한다.
+  const detailTab = await context.newPage()
+  await detailTab.goto(new URL(detailHref!, page.url()).href)
   await expect(detailTab.getByRole('heading', { name: '사건 기본정보', exact: true })).toBeVisible()
   await expect(detailTab.getByRole('link', { name: '검색 결과로', exact: true })).toHaveAttribute('href', returnTo)
   await detailTab.getByRole('link', { name: '검색 결과로', exact: true }).click()
