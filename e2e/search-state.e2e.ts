@@ -100,18 +100,41 @@ test('검색 로딩·오류를 0건과 구분하고 재검색 중 이전 무결�
     }
     await route.fulfill({ json: searchResponse(url) })
   })
-  await page.addInitScript(() => {
+  await page.addInitScript(nonemptyQuery => {
     const state = window as Window & { loadingZeroViolations: string[] }
     state.loadingZeroViolations = []
-    new MutationObserver(() => {
+    let scheduled = false
+    const inspect = () => {
+      scheduled = false
       if (location.pathname !== '/search') return
       const loading = [...document.querySelectorAll('[role="status"]')]
         .some(node => node.textContent?.includes('검색 결과를 불러오는 중'))
-      if (loading && document.body?.innerText.includes('현재 조건에서 0개의 물건이 검색되었습니다.')) {
+      const query = new URLSearchParams(location.search).get('q')
+      const text = document.body?.innerText ?? ''
+      const empty = text.includes('현재 조건에서 0개의 물건이 검색되었습니다.') ||
+        text.includes('조건에 맞는 물건이 없습니다.')
+      if (empty && (loading || query === nonemptyQuery)) {
         state.loadingZeroViolations.push(location.href)
       }
-    }).observe(document, { childList: true, subtree: true, characterData: true })
-  })
+    }
+    const schedule = () => {
+      if (scheduled) return
+      scheduled = true
+      requestAnimationFrame(inspect)
+    }
+    new MutationObserver(schedule).observe(document, { childList: true, subtree: true, characterData: true })
+    // URL만 먼저 바뀌고 React가 아직 이전 0건 화면을 그리는 첫 프레임도 검사한다.
+    for (const method of ['pushState', 'replaceState'] as const) {
+      const original = history[method]
+      history[method] = function (this: History, ...args: Parameters<History['pushState']>) {
+        const result = original.apply(this, args)
+        schedule()
+        return result
+      }
+    }
+    addEventListener('DOMContentLoaded', schedule)
+    addEventListener('popstate', schedule)
+  }, query)
   const zero = page.getByText('현재 조건에서 0개의 물건이 검색되었습니다.', { exact: true })
   const empty = page.getByText('조건에 맞는 물건이 없습니다.', { exact: true })
   const loading = page.getByRole('status').filter({ hasText: '검색 결과를 불러오는 중' })
@@ -157,6 +180,7 @@ test('검색 로딩·오류를 0건과 구분하고 재검색 중 이전 무결�
     await expect(loading).toBeVisible()
     await expect(zero).toHaveCount(0)
     await expect(empty).toHaveCount(0)
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())))
   } finally {
     repeated.release()
   }

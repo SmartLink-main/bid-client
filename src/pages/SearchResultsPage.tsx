@@ -373,6 +373,14 @@ export default function SearchResultsPage() {
     }
   }, [currentSearchParams, requestKey, searchMode, setSearchParams, usageContextKey])
 
+  const changeSearchParams = (next: URLSearchParams) => {
+    // 라우터의 화면 전환이 지연돼도 새 검색을 제출한 순간 이전 결과를 숨긴다.
+    if (next.toString() !== searchKey) {
+      setPageState({ key: requestKey, status: 'loading' })
+    }
+    setSearchParams(next)
+  }
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const next = new URLSearchParams(currentSearchParams)
@@ -384,14 +392,14 @@ export default function SearchResultsPage() {
     }
 
     next.set('offset', '0')
-    setSearchParams(next)
+    changeSearchParams(next)
   }
 
   const handleSortChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const next = new URLSearchParams(currentSearchParams)
     next.set('sort_by', event.target.value)
     next.set('offset', '0')
-    setSearchParams(next)
+    changeSearchParams(next)
   }
 
   const handleUsageSelect = (usage: string | null) => {
@@ -399,13 +407,13 @@ export default function SearchResultsPage() {
     next.delete('goods_usage')
     if (usage !== null) next.append('goods_usage', usage)
     next.set('offset', '0')
-    setSearchParams(next)
+    changeSearchParams(next)
   }
 
   const handleOffsetChange = (nextOffset: number) => {
     const next = new URLSearchParams(currentSearchParams)
     next.set('offset', String(Math.max(0, nextOffset)))
-    setSearchParams(next)
+    changeSearchParams(next)
   }
 
   return (
