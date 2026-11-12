@@ -132,10 +132,10 @@ test('성남시 상위 행 없이 수정구와 분당구의 현재 물건을 빠
   expect(payload.items.map((item) => item.auction_goods_id).sort()).toEqual([120001, 120002])
   expectCurrentItems(payload)
   await expect(page.getByRole('article')).toHaveCount(2)
-  await expect(page.getByText('상위시 검증 수정구 현재', { exact: true })).toBeVisible()
-  await expect(page.getByText('상위시 검증 분당구 예정', { exact: true })).toBeVisible()
-  await expect(page.getByText('상위시 검증 분당구 과거', { exact: true })).toHaveCount(0)
-  await expect(page.getByText('상위시 검증 용인시 현재', { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('article').locator('a[href^="/goods/120001?"]')).toBeVisible()
+  await expect(page.getByRole('article').locator('a[href^="/goods/120002?"]')).toBeVisible()
+  await expect(page.getByRole('article').locator('a[href^="/goods/120003?"]')).toHaveCount(0)
+  await expect(page.getByRole('article').locator('a[href^="/goods/120004?"]')).toHaveCount(0)
 })
 
 test('일치하는 지역 물건이 없으면 다른 지역 대신 빈 결과를 표시한다', async ({ page }) => {
