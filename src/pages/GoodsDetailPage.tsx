@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import {
   AlertCircle,
   ArrowLeft,
@@ -20,6 +20,7 @@ import GoodsAppraisalContent from '../components/GoodsAppraisalContent'
 import { goodsScheduleLabels } from '../lib/goods-detail-display'
 import { orderGoodsPhotos } from '../lib/goods-photo-display'
 import { getKoreanErrorMessage } from '../lib/api'
+import { getSafeInternalReturnTo } from '../lib/navigation'
 import { formatMoney } from '../lib/format'
 import {
   getGoodsDetail,
@@ -231,6 +232,11 @@ function PhotoGrid({ photos }: { photos: GoodsPhoto[] }) {
 }
 
 export default function GoodsDetailPage() {
+  const location = useLocation()
+  const searchReturnTo = getSafeInternalReturnTo(
+    new URLSearchParams(location.search).get('search_return_to'),
+    '/search',
+  )
   const { auctionGoodsId } = useParams()
   const [detailState, setDetailState] = useState<GoodsRequestState<GoodsDetailResponse>>({
     auctionGoodsId,
@@ -325,7 +331,7 @@ export default function GoodsDetailPage() {
       <div className="w-full flex-grow bg-slate-50 px-4 py-6 md:py-8">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
           <Link
-            to="/search"
+            to={searchReturnTo}
             className="inline-flex w-fit items-center gap-2 text-sm font-bold text-slate-600 hover:text-indigo-700"
           >
             <ArrowLeft className="h-4 w-4" />

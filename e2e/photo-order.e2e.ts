@@ -41,7 +41,7 @@ async function openDetailFromSearch(page: Page) {
   await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBe(240)
   const source = await image.getAttribute('src')
   await card.getByRole('link', { name: '상세보기' }).click()
-  await expect(page).toHaveURL(/\/goods\/1$/)
+  await expect(page).toHaveURL((url) => url.pathname === '/goods/1')
   const gallery = page.getByRole('region', { name: '물건 사진 목록' })
   await gallery.scrollIntoViewIfNeeded()
   await expect(gallery.getByRole('img').first()).toHaveAttribute('src', source!)

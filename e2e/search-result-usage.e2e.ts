@@ -523,7 +523,7 @@ test('대표 사진이 없거나 이미지 응답이 실패해도 카드 내용�
   const first = page.getByRole('article').first()
   await expect(first.getByText('사진 확인 불가', { exact: true })).toBeVisible()
   await expect(first.getByRole('heading', { name: '2099타경1', exact: true })).toBeVisible()
-  await expect(first.getByRole('link', { name: '상세보기', exact: true })).toHaveAttribute('href', '/goods/9100')
+  await expect(first.getByRole('link', { name: '상세보기', exact: true })).toHaveAttribute('href', '/goods/9100?search_return_to=%2Fsearch')
   await first.getByRole('button', { name: '사진 다시 불러오기', exact: true }).click()
   await expect.poll(() => first.getByRole('img').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(320)
   const second = page.getByRole('article').nth(1)

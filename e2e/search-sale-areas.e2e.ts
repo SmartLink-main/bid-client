@@ -20,7 +20,7 @@ test('검색 카드와 상세의 평수가 일치하고 면적 필터도 매각�
   await expect(card.getByRole('group', { name: '토지 및 건물 면적' })).toContainText('37.96평')
   await card.screenshot({ path: testInfo.outputPath('search-sale-areas.png') })
   await card.getByRole('link', { name: '상세보기' }).click()
-  await expect(page).toHaveURL(/\/goods\/1$/)
+  await expect(page).toHaveURL((url) => url.pathname === '/goods/1')
   await expect(page.getByRole('region', { name: '매각목록 면적', exact: true })).toContainText('103.35평')
 })
 

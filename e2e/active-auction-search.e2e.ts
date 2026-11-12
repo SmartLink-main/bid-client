@@ -9,7 +9,7 @@ const activeIds = [110001, 110002, 110005, 110006]
 const halfPriceIds = [110001, 110002, 110006]
 
 function goodsLink(page: Page, goodsId: number) {
-  return page.getByRole('article').locator(`a[href="/goods/${goodsId}"]`)
+  return page.getByRole('article').locator(`a[href="/goods/${goodsId}"], a[href^="/goods/${goodsId}?"]`)
 }
 
 function koreanAuctionDate(dayOffset = 0) {

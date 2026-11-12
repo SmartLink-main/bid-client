@@ -6,7 +6,7 @@ import {
   useMemo,
   useState,
 } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import Layout from '../components/Layout'
 import SearchCaseNumber from '../components/SearchCaseNumber'
 import SearchResultPhoto from '../components/SearchResultPhoto'
@@ -14,6 +14,7 @@ import SearchUsageFilter from '../components/SearchUsageFilter'
 import {
   searchGoods,
   type AuctionGoodsSearchItem,
+  type AuctionGoodsSearchResponse,
   type AuctionSearchMode,
   type AuctionSearchParams,
 } from '../lib/auction'
@@ -156,10 +157,12 @@ const ResultCard = memo(function ResultCard({
   goods,
   previewCache,
   today,
+  searchReturnTo,
 }: {
   goods: AuctionGoodsSearchItem
   previewCache: SearchResultPreviewCache
   today: string
+  searchReturnTo: string
 }) {
   const address = goods.printed_address || goods.road_address || goods.lot_number_address
   const { cardRef, caseNumber, photoUrl, status, retry } = useSearchResultPreview(goods, previewCache)
@@ -239,7 +242,10 @@ const ResultCard = memo(function ResultCard({
               </a>
             )}
             <Link
-              to={`/goods/${goods.auction_goods_id}`}
+              to={{
+                pathname: `/goods/${goods.auction_goods_id}`,
+                search: new URLSearchParams({ search_return_to: searchReturnTo }).toString(),
+              }}
               className="group inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-extrabold text-white transition-colors hover:bg-indigo-700"
             >
               상세보기
@@ -251,6 +257,11 @@ const ResultCard = memo(function ResultCard({
     </article>
   )
 })
+
+type SearchPageState =
+  | { key: string; status: 'loading' }
+  | { key: string; status: 'success'; response: AuctionGoodsSearchResponse }
+  | { key: string; status: 'error'; message: string }
 
 export default function SearchResultsPage() {
   const [today, setToday] = useState(getKoreanDateKey)
@@ -267,6 +278,8 @@ export default function SearchResultsPage() {
       document.removeEventListener('visibilitychange', refreshToday)
     }
   }, [])
+  const location = useLocation()
+  const searchReturnTo = `${location.pathname}${location.search}${location.hash}`
   const [searchParams, setSearchParams] = useSearchParams()
   const searchKey = searchParams.toString()
   const normalizedSearchKey = useMemo(
@@ -277,11 +290,16 @@ export default function SearchResultsPage() {
     () => new URLSearchParams(normalizedSearchKey),
     [normalizedSearchKey],
   )
-  const [items, setItems] = useState<AuctionGoodsSearchItem[]>([])
-  const [total, setTotal] = useState(0)
-  const [isLoading, setIsLoading] = useState(false)
-  const [errorMessage, setErrorMessage] = useState('')
   const [retryKey, setRetryKey] = useState(0)
+  const requestKey = JSON.stringify([normalizedSearchKey, retryKey])
+  const [pageState, setPageState] = useState<SearchPageState>({ key: requestKey, status: 'loading' })
+  // URL 변경·재시도 직후에는 이전 요청의 결과나 오류를 새 조건에 표시하지 않는다.
+  const currentPage = pageState.key === requestKey ? pageState : undefined
+  const result = currentPage?.status === 'success' ? currentPage.response : undefined
+  const items = result?.items ?? []
+  const total = result?.total ?? 0
+  const isLoading = !currentPage || currentPage.status === 'loading'
+  const errorMessage = currentPage?.status === 'error' ? currentPage.message : ''
   const [query, setQuery] = useState(currentSearchParams.get('q') || '')
   const [usageSeed, setUsageSeed] = useState<SearchUsageSeed | null>(null)
   const filterLabels = useFilterLabels(currentSearchParams)
@@ -310,13 +328,11 @@ export default function SearchResultsPage() {
   useEffect(() => {
     const controller = new AbortController()
     let isActive = true
-    let isRedirectingToLastPage = false
     const params = paramsFromSearch(currentSearchParams)
 
     queueMicrotask(() => {
       if (isActive && !controller.signal.aborted) {
-        setIsLoading(true)
-        setErrorMessage('')
+        setPageState({ key: requestKey, status: 'loading' })
       }
     })
 
@@ -331,7 +347,6 @@ export default function SearchResultsPage() {
             params.limit ?? DEFAULT_SEARCH_RESULT_LIMIT,
           )
           if (lastOffset !== requestedOffset) {
-            isRedirectingToLastPage = true
             const next = new URLSearchParams(currentSearchParams)
             next.set('offset', String(lastOffset))
             setSearchParams(next, { replace: true })
@@ -339,20 +354,16 @@ export default function SearchResultsPage() {
           }
         }
 
-        setItems(response.items)
-        setTotal(response.total)
+        setPageState({ key: requestKey, status: 'success', response })
         setUsageSeed((current) => current?.key === usageContextKey ? current : { key: usageContextKey, params, response })
       })
       .catch((error: unknown) => {
-        if (!controller.signal.aborted) {
-          setErrorMessage(getKoreanErrorMessage(error, '검색에 실패했습니다.'))
-          setItems([])
-          setTotal(0)
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted && !isRedirectingToLastPage) {
-          setIsLoading(false)
+        if (isActive && !controller.signal.aborted) {
+          setPageState({
+            key: requestKey,
+            status: 'error',
+            message: getKoreanErrorMessage(error, '검색에 실패했습니다.'),
+          })
         }
       })
 
@@ -360,7 +371,7 @@ export default function SearchResultsPage() {
       isActive = false
       controller.abort()
     }
-  }, [currentSearchParams, retryKey, searchMode, setSearchParams, usageContextKey])
+  }, [currentSearchParams, requestKey, searchMode, setSearchParams, usageContextKey])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -434,13 +445,17 @@ export default function SearchResultsPage() {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="text-2xl font-extrabold text-slate-900">{pageTitle}</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                현재 조건에서 {total.toLocaleString('ko-KR')}개의 물건이 검색되었습니다.
-                {total > items.length && items.length > 0 && (
-                  <span className="ml-1 text-gray-400">
-                    {items.length.toLocaleString('ko-KR')}개 표시 중
-                  </span>
-                )}
+              <p className="mt-1 text-sm text-gray-500" aria-live="polite">
+                {isLoading ? '검색 결과를 불러오고 있습니다.' : errorMessage ? '검색 결과를 불러오지 못했습니다.' : result ? (
+                  <>
+                    현재 조건에서 {total.toLocaleString('ko-KR')}개의 물건이 검색되었습니다.
+                    {total > items.length && items.length > 0 && (
+                      <span className="ml-1 text-gray-400">
+                        {items.length.toLocaleString('ko-KR')}개 표시 중
+                      </span>
+                    )}
+                  </>
+                ) : null}
               </p>
             </div>
             {filterLabels.length > 0 && (
@@ -483,14 +498,14 @@ export default function SearchResultsPage() {
             </div>
           )}
 
-          {!isLoading && !errorMessage && items.length === 0 && (
+          {result && items.length === 0 && (
             <div className="rounded-lg border border-gray-200 bg-white p-10 text-center">
               <p className="text-lg font-extrabold text-slate-900">조건에 맞는 물건이 없습니다.</p>
               <p className="mt-2 text-sm text-gray-500">검색어를 줄이거나 지역, 물건종류 조건을 조정해보세요.</p>
             </div>
           )}
 
-          {!isLoading && !errorMessage && items.length > 0 && (
+          {result && items.length > 0 && (
             <div className="grid gap-4">
               {items.map((goods) => (
                 <ResultCard
@@ -498,6 +513,7 @@ export default function SearchResultsPage() {
                   goods={goods}
                   previewCache={previewCache}
                   today={today}
+                  searchReturnTo={searchReturnTo}
                 />
               ))}
             </div>

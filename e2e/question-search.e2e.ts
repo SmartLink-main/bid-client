@@ -51,7 +51,7 @@ type AuctionSearchResponse = {
 const DEFAULT_QUESTION_RESULT_LIMIT = 10
 
 function goodsLink(page: Page, goodsId: number) {
-  return page.getByRole('article').locator(`a[href="/goods/${goodsId}"]`)
+  return page.getByRole('article').locator(`a[href="/goods/${goodsId}"], a[href^="/goods/${goodsId}?"]`)
 }
 
 async function prepareAnonymousSession(page: Page) {
