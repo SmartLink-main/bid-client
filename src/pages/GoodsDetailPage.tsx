@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   CalendarDays,
   Gavel,
-  Home,
   Loader2,
   MapPin,
   RefreshCw,
@@ -366,7 +365,7 @@ export default function GoodsDetailPage() {
           {hasUsableResponse && summary && detail && (
             <>
               <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+                <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-indigo-700">
                       <span>{displayValue(summary.court_name)}</span>
@@ -384,11 +383,11 @@ export default function GoodsDetailPage() {
                       {displayValue(summary.address, '주소 정보 없음')}
                     </p>
                   </div>
-                  <div className="flex min-w-0 flex-col items-stretch gap-3 md:min-w-80">
+                  <div className="flex min-w-0 flex-col items-stretch gap-3">
                     {auctionGoodsId && (
                       <FavoriteToggleButton auctionGoodsId={auctionGoodsId} className="w-full" />
                     )}
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-3 sm:grid-cols-3">
                       <div className="rounded-lg bg-slate-50 p-4">
                         <div className="text-xs font-bold text-gray-400">감정가</div>
                         <div className="mt-1 text-lg font-extrabold text-slate-900">
@@ -401,12 +400,19 @@ export default function GoodsDetailPage() {
                           {displayAmount(summary.lowest_sale_price_text, summary.lowest_sale_price)}
                         </div>
                       </div>
+                      <div className="rounded-lg bg-slate-50 p-4">
+                        <div className="text-xs font-bold text-gray-400">{scheduleLabels?.deposit}</div>
+                        <div className="mt-1 text-lg font-extrabold text-slate-900">
+                          {displayAmount(summary.bid_deposit_amount_text, summary.bid_deposit_amount)}
+                        </div>
+                        <p className="mt-1 text-xs font-bold text-gray-400">보증금률 {displayValue(summary.bid_deposit_rate_text)}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
               </section>
 
-              <section className="grid gap-4 md:grid-cols-3">
+              <section className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                   <Gavel className="h-5 w-5 text-indigo-600" />
                   <div className="mt-3 text-sm font-bold text-gray-400">입찰 방식 · 상태</div>
@@ -420,14 +426,6 @@ export default function GoodsDetailPage() {
                   <div className="mt-1 text-lg font-extrabold text-slate-900">
                     {displayValue(summary.sale_date_text || summary.sale_date, '미확인')}
                   </div>
-                </div>
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <Home className="h-5 w-5 text-indigo-600" />
-                  <div className="mt-3 text-sm font-bold text-gray-400">{scheduleLabels?.deposit}</div>
-                  <div className="mt-1 text-lg font-extrabold text-slate-900">
-                    {displayAmount(summary.bid_deposit_amount_text, summary.bid_deposit_amount)}
-                  </div>
-                  <p className="mt-1 text-xs font-bold text-gray-400">보증금률 {displayValue(summary.bid_deposit_rate_text)}</p>
                 </div>
               </section>
 
