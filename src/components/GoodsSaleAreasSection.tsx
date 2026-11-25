@@ -30,22 +30,22 @@ function AreaValue({ area }: { area: GoodsSaleAreaValue }) {
 // 공부·매각목록 면적은 건축물대장의 대지·건축·연면적과 따로 제공한다.
 export default function GoodsSaleAreasSection({ areas }: { areas?: SaleAreas }) {
   return (
-    <section aria-labelledby="sale-areas-heading" className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm md:p-6">
+    <section aria-labelledby="sale-areas-heading" className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:px-5">
       <h2 id="sale-areas-heading" className="text-lg font-extrabold text-slate-900">매각목록 면적</h2>
       <p className="mt-1 text-sm leading-6 text-gray-500">
         공부·매각목록의 기재 면적에 매각 지분과 포함·제외 조건을 적용합니다. 실측면적은 반영하지 않습니다.
       </p>
       {areas?.available ? (
-        <div className="mt-5 space-y-5">
+        <div className="mt-3 space-y-2">
           <dl className="grid gap-4 sm:grid-cols-3">
             {[
               ['토지·대지권 합계', areas.land],
               ['본건 건물', areas.main_building],
               ['건물·제시외 포함 합계', areas.listed_total],
             ].map(([label, value]) => (
-              <div key={label as string} className="rounded-lg bg-slate-50 p-4">
+              <div key={label as string} className="rounded-lg bg-slate-50 px-4 py-2.5">
                 <dt className="text-xs font-bold text-gray-500">{label as string}</dt>
-                <dd className="mt-2 break-words text-sm font-extrabold leading-6 text-slate-900">
+                <dd className="mt-1 break-words text-sm font-extrabold leading-5 text-slate-900">
                   <AreaValue area={value as GoodsSaleAreaValue} />
                 </dd>
               </div>

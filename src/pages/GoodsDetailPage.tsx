@@ -327,8 +327,8 @@ export default function GoodsDetailPage() {
 
   return (
     <Layout>
-      <div className="w-full flex-grow bg-slate-50 px-4 py-6 md:py-8">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+      <div className="w-full flex-grow bg-slate-50 px-4 py-5 md:py-6">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
           <Link
             to={searchReturnTo}
             className="inline-flex w-fit items-center gap-2 text-sm font-bold text-slate-600 hover:text-indigo-700"
@@ -364,7 +364,7 @@ export default function GoodsDetailPage() {
 
           {hasUsableResponse && summary && detail && (
             <>
-              <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                 <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-indigo-700">
@@ -412,28 +412,38 @@ export default function GoodsDetailPage() {
                 </div>
               </section>
 
-              <section className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <Gavel className="h-5 w-5 text-indigo-600" />
-                  <div className="mt-3 text-sm font-bold text-gray-400">입찰 방식 · 상태</div>
-                  <div className="mt-1 text-lg font-extrabold text-slate-900">
-                    {displayValue(summary.bid_division_name)} · {displayValue(summary.goods_status_name)}
-                  </div>
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <dl className="grid flex-1 content-between gap-4 sm:grid-cols-2 md:grid-cols-1">
+                    <div className="relative pl-6">
+                      <dt className="text-xs font-bold text-slate-500">
+                        <Gavel aria-hidden="true" className="absolute left-0 top-0.5 h-4 w-4 text-indigo-600" />
+                        입찰 방식 · 상태
+                      </dt>
+                      <dd className="mt-1 break-words text-sm font-extrabold text-slate-900">
+                        {displayValue(summary.bid_division_name)} · {displayValue(summary.goods_status_name)}
+                      </dd>
+                    </div>
+                    <div className="relative pl-6">
+                      <dt className="text-xs font-bold text-slate-500">
+                        <CalendarDays aria-hidden="true" className="absolute left-0 top-0.5 h-4 w-4 text-indigo-600" />
+                        {scheduleLabels?.date}
+                      </dt>
+                      <dd className="mt-1 break-words text-sm font-extrabold text-slate-900">
+                        {displayValue(summary.sale_date_text || summary.sale_date, '미확인')}
+                      </dd>
+                    </div>
+                  </dl>
+                  {scheduleLabels?.notice && (
+                    <p role="status" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+                      {scheduleLabels.notice}
+                    </p>
+                  )}
                 </div>
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <CalendarDays className="h-5 w-5 text-indigo-600" />
-                  <div className="mt-3 text-sm font-bold text-gray-400">{scheduleLabels?.date}</div>
-                  <div className="mt-1 text-lg font-extrabold text-slate-900">
-                    {displayValue(summary.sale_date_text || summary.sale_date, '미확인')}
-                  </div>
-                </div>
-              </section>
+                <GoodsLocationSection location={detail.location} address={summary.address} />
+              </div>
 
-              {scheduleLabels?.notice && (
-                <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">{scheduleLabels.notice}</p>
-              )}
-
-              <GoodsLocationSection location={detail.location} address={summary.address} />
+              <GoodsSaleAreasSection areas={detail.sale_areas} />
 
               {auctionGoodsId && (
                 <GoodsCommentsSection
@@ -595,7 +605,6 @@ export default function GoodsDetailPage() {
                 ) : <EmptyMessage>등록된 매각기일 이력이 없습니다.</EmptyMessage>}
               </SectionCard>
 
-              <GoodsSaleAreasSection areas={detail.sale_areas} />
 
               <SectionCard title="감정평가" description="감정평가요항표의 설명을 모았습니다. 매각 주의사항은 아래 권리·특수조건 주의사항에서 확인할 수 있습니다.">
                 {appraisal ? (
