@@ -375,12 +375,12 @@ export default function GoodsDetailPage() {
                         <span className="rounded-md bg-indigo-50 px-2 py-1">{summary.goods_type_name}</span>
                       )}
                     </div>
-                    <h1 className="mt-3 break-words text-2xl font-extrabold tracking-tight text-slate-900 md:text-3xl">
+                    <h1 className="mt-3 break-words text-base font-bold text-slate-700 md:text-lg">
                       {displayValue(summary.title, `물건 ${auctionGoodsId ?? ''}`)}
                     </h1>
-                    <p className="mt-3 flex items-start gap-2 text-sm font-medium leading-6 text-gray-600">
-                      <MapPin className="mt-1 h-4 w-4 shrink-0 text-gray-400" />
-                      {displayValue(summary.address, '주소 정보 없음')}
+                    <p className="mt-2 flex items-start gap-2 text-lg font-bold leading-7 text-slate-900 md:text-xl">
+                      <MapPin aria-hidden="true" className="mt-1 h-5 w-5 shrink-0 text-gray-400" />
+                      <span className="min-w-0 break-words">{displayValue(summary.address, '주소 정보 없음')}</span>
                     </p>
                   </div>
                   <div className="flex min-w-0 flex-col items-stretch gap-3">
@@ -444,6 +444,10 @@ export default function GoodsDetailPage() {
               </div>
 
               <GoodsSaleAreasSection areas={detail.sale_areas} />
+
+              <SectionCard title="물건 사진" description="이 물건에 연결된 법원 수집 사진입니다.">
+                <PhotoGrid key={detail.auction_goods_id} photos={orderGoodsPhotos(detail.photos?.items ?? [], detail.auction_goods_id)} />
+              </SectionCard>
 
               {auctionGoodsId && (
                 <GoodsCommentsSection
@@ -777,10 +781,6 @@ export default function GoodsDetailPage() {
                     ))}
                   </div>
                 ) : <EmptyMessage>조건에 맞는 인근 매각사례가 없습니다.</EmptyMessage>}
-              </SectionCard>
-
-              <SectionCard title="물건 사진" description="이 물건에 연결된 법원 수집 사진입니다.">
-                <PhotoGrid key={detail.auction_goods_id} photos={orderGoodsPhotos(detail.photos?.items ?? [], detail.auction_goods_id)} />
               </SectionCard>
 
               <SectionCard title="매각물건명세서" description="이 물건에 연결된 법원 문서 원본을 확인하거나 다운로드할 수 있습니다. 최근 수집 문서부터 표시합니다.">
