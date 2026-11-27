@@ -563,9 +563,15 @@ export default function GoodsDetailPage() {
                 ) : <EmptyMessage>진행 일정 정보가 없습니다.</EmptyMessage>}
               </SectionCard>
 
-              <SectionCard title="매각기일 이력" description="기일별 최저가, 입찰기간과 결과를 확인할 수 있습니다.">
+              <details key={detail.auction_goods_id} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm md:p-6">
+                <summary className="cursor-pointer text-lg font-extrabold text-slate-900">
+                  매각기일 이력
+                  <span className="mt-1 block text-sm font-normal leading-6 text-gray-500">
+                    기일별 최저가, 입찰기간과 결과를 확인할 수 있습니다.
+                  </span>
+                </summary>
                 {hearings && hearings.items.length > 0 ? (
-                  <div className="overflow-x-auto">
+                  <div className="mt-5 overflow-x-auto">
                     <table className="w-full min-w-[760px] text-left text-sm">
                       <thead className="border-b border-gray-200 text-xs font-bold text-gray-400">
                         <tr>
@@ -606,8 +612,12 @@ export default function GoodsDetailPage() {
                       </tbody>
                     </table>
                   </div>
-                ) : <EmptyMessage>등록된 매각기일 이력이 없습니다.</EmptyMessage>}
-              </SectionCard>
+                ) : (
+                  <div className="mt-5">
+                    <EmptyMessage>등록된 매각기일 이력이 없습니다.</EmptyMessage>
+                  </div>
+                )}
+              </details>
 
 
               <SectionCard title="감정평가" description="감정평가요항표의 설명을 모았습니다. 매각 주의사항은 아래 권리·특수조건 주의사항에서 확인할 수 있습니다.">
