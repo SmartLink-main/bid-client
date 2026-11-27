@@ -414,7 +414,7 @@ export default function GoodsDetailPage() {
 
               <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
                 <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                  <dl className="grid flex-1 content-between gap-4 sm:grid-cols-2 md:grid-cols-1">
+                  <dl className={`grid flex-1 content-between gap-4 sm:grid-cols-2 md:grid-cols-1 ${scheduleLabels?.notice ? 'lg:grid-cols-2' : ''}`}>
                     <div className="relative pl-6">
                       <dt className="text-xs font-bold text-slate-500">
                         <Gavel aria-hidden="true" className="absolute left-0 top-0.5 h-4 w-4 text-indigo-600" />
