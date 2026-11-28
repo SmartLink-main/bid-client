@@ -41,9 +41,10 @@ async function readSpecification(goodsId: number, document: GoodsDocument, signa
       ? text.filter(item => item.y < remarksLabel.y && item.y > footer.y)
         .sort((a, b) => b.y - a.y || a.x - b.x)
       : []
-    const conditionStart = remarks.findIndex(item => /^특별\s*매각\s*조건\s*[:：]/.test(item.value))
+    const conditionLabel = /^특별\s*매각\s*조건(?=\s|[:：]|$)\s*[:：]?\s*/
+    const conditionStart = remarks.findIndex(item => conditionLabel.test(item.value))
     const condition = conditionStart >= 0
-      ? remarks.slice(conditionStart).map(item => item.value).join('\n').replace(/^특별\s*매각\s*조건\s*[:：]\s*/, '')
+      ? remarks.slice(conditionStart).map(item => item.value).join('\n').replace(conditionLabel, '')
       : ''
     const result: Result = { rows: [], noTenancy: false, priority: priority || unknown, condition: condition || unknown }
     const moveIn = text.find(item => /^전입신고일자[·ㆍ]?$/.test(item.value))
