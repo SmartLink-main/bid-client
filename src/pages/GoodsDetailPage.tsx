@@ -13,6 +13,7 @@ import Layout from '../components/Layout'
 import FavoriteToggleButton from '../components/FavoriteToggleButton'
 import GoodsCommentsSection from '../components/GoodsCommentsSection'
 import GoodsDocumentsSection from '../components/GoodsDocumentsSection'
+import SaleSpecificationTenantDates from '../components/SaleSpecificationTenantDates'
 import GoodsSaleAreasSection from '../components/GoodsSaleAreasSection'
 import GoodsLocationSection from '../components/GoodsLocationSection'
 import GoodsAppraisalContent from '../components/GoodsAppraisalContent'
@@ -320,6 +321,7 @@ export default function GoodsDetailPage() {
   const appraisal = detail?.appraisal
   const building = detail?.building
   const tenants = detail?.tenants
+  const previewTenantDocument = detail?.documents?.items.find(document => document.document_type === 'sale_specification')
   const registry = detail?.registry_rights
   const risks = detail?.risk_notices
   const nearbySales = detail?.nearby_sales
@@ -688,6 +690,11 @@ export default function GoodsDetailPage() {
               </SectionCard>
 
               <SectionCard title="임차인 현황" description="점유, 전입, 확정일자, 배당요구와 임대차 금액 정보입니다.">
+                {previewTenantDocument && (
+                  <div className="mb-5">
+                    <SaleSpecificationTenantDates key={previewTenantDocument.document_id} goodsId={detail.auction_goods_id} document={previewTenantDocument} />
+                  </div>
+                )}
                 {tenants ? (
                   <div className="space-y-5">
                     <InfoGrid
