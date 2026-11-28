@@ -20,7 +20,7 @@ import { goodsScheduleLabels } from '../lib/goods-detail-display'
 import { orderGoodsPhotos } from '../lib/goods-photo-display'
 import { getKoreanErrorMessage } from '../lib/api'
 import { getSafeInternalReturnTo } from '../lib/navigation'
-import { formatMoney } from '../lib/format'
+import { formatAuctionCountdown, formatMoney, getKoreanDateKey } from '../lib/format'
 import {
   getGoodsDetail,
   getGoodsPhotoUrl,
@@ -431,6 +431,11 @@ export default function GoodsDetailPage() {
                       </dt>
                       <dd className="mt-1 break-words text-sm font-extrabold text-slate-900">
                         {displayValue(summary.sale_date_text || summary.sale_date, '미확인')}
+                        {summary.sale_schedule_status === 'upcoming' && summary.sale_date && (
+                          <span className="ml-2 text-xs font-bold text-indigo-600">
+                            {formatAuctionCountdown(summary.sale_date, getKoreanDateKey())}
+                          </span>
+                        )}
                       </dd>
                     </div>
                   </dl>
@@ -542,23 +547,28 @@ export default function GoodsDetailPage() {
                         </div>
                       ) : <div className="mt-3"><EmptyMessage>등록된 담당계 일정이 없습니다.</EmptyMessage></div>}
                     </div>
-                    <div>
-                      <h3 className="text-sm font-extrabold text-slate-900">사건 진행 내역</h3>
-                      {progress.case_events.length > 0 ? (
-                        <ol className="mt-3 space-y-3 border-l-2 border-indigo-100 pl-5">
-                          {progress.case_events.map((event, index) => (
-                            <li key={`${event.event_date ?? 'event'}-${index}`} className="relative rounded-lg bg-slate-50 p-4">
-                              <span className="absolute -left-[1.65rem] top-5 h-3 w-3 rounded-full border-2 border-indigo-600 bg-white" />
-                              <p className="text-xs font-bold text-indigo-600">{displayValue(event.event_date_text || event.event_date)}</p>
-                              <p className="mt-1 text-sm font-extrabold text-slate-900">{displayValue(event.event_detail)}</p>
-                              <p className="mt-1 text-xs text-gray-500">
-                                {[event.event_source, event.event_result].filter(Boolean).join(' · ') || '-'}
-                              </p>
-                            </li>
-                          ))}
-                        </ol>
-                      ) : <div className="mt-3"><EmptyMessage>등록된 사건 진행 내역이 없습니다.</EmptyMessage></div>}
-                    </div>
+                    {[
+                      { title: '문건접수', events: progress.case_events.filter((event) => event.event_source === 'document_filing') },
+                      { title: '송달내역', events: progress.case_events.filter((event) => event.event_source === 'delivery') },
+                      { title: '기타 사건 진행 내역', events: progress.case_events.filter((event) => event.event_source !== 'document_filing' && event.event_source !== 'delivery') },
+                    ].map(({ title, events }) => (
+                      <details key={title} className="rounded-lg border border-gray-200 p-4">
+                        <summary className="cursor-pointer text-sm font-extrabold text-slate-900">
+                          {title} ({events.length}건)
+                        </summary>
+                        {events.length > 0 ? (
+                          <ol className="mt-3 divide-y divide-gray-200">
+                            {events.map((event, index) => (
+                              <li key={`${event.event_date ?? 'event'}-${index}`} className="py-3">
+                                <p className="text-xs font-bold text-indigo-600">{displayValue(event.event_date_text || event.event_date)}</p>
+                                <p className="mt-1 text-sm font-bold text-slate-900">{displayValue(event.event_detail)}</p>
+                                {event.event_result && <p className="mt-1 text-xs text-gray-500">{event.event_result}</p>}
+                              </li>
+                            ))}
+                          </ol>
+                        ) : <div className="mt-3"><EmptyMessage>확인할 수 있는 내역이 없습니다.</EmptyMessage></div>}
+                      </details>
+                    ))}
                   </div>
                 ) : <EmptyMessage>진행 일정 정보가 없습니다.</EmptyMessage>}
               </SectionCard>
